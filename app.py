@@ -14,23 +14,10 @@ genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 
 # Optional imports with error handling
 OPTIONAL_FEATURES = {
-    'voice': False,
     'image': False,
     'spreadsheet': False,
     'pdf': False
 }
-
-try:
-    import speech_recognition as sr
-    from gtts import gTTS
-    OPTIONAL_FEATURES['voice'] = True
-except ImportError:
-    st.sidebar.warning("""
-    Voice features are disabled. To enable voice features, install required packages:
-    ```bash
-    pip install SpeechRecognition gTTS PyAudio
-    ```
-    """)
 
 try:
     from PIL import Image
@@ -126,8 +113,6 @@ def initialize_session_state():
         st.session_state.agent = ResponseAgent()
     if 'suggestions' not in st.session_state:
         st.session_state.suggestions = []
-    if 'voice_input' not in st.session_state:
-        st.session_state.voice_input = False
 
 def convert_to_pdf(content: str) -> Optional[bytes]:
     """Convert content to PDF format."""
@@ -172,22 +157,6 @@ def get_download_link(content: str, format: str) -> Optional[str]:
     except Exception as e:
         st.error(f"Error generating {format} download: {str(e)}")
     return None
-
-def handle_voice_input() -> str:
-    """Handle voice input and convert to text."""
-    if not OPTIONAL_FEATURES['voice']:
-        st.error("Voice input is not available. Please install required packages.")
-        return ""
-    
-    try:
-        r = sr.Recognizer()
-        with sr.Microphone() as source:
-            st.write("Listening... Click 'Stop' when finished.")
-            audio = r.listen(source)
-            return r.recognize_google(audio)
-    except Exception as e:
-        st.error(f"Error processing voice input: {str(e)}")
-        return ""
 
 def generate_suggestions(content: str) -> list:
     """Generate follow-up suggestions based on content."""
@@ -285,11 +254,8 @@ def main():
     
     # Sidebar controls
     with st.sidebar:
-        st.write("Input Options")
-        voice_input = st.toggle("Voice Input", value=st.session_state.voice_input, disabled=not OPTIONAL_FEATURES['voice'])
-        
+        st.write("Upload Media")
         if OPTIONAL_FEATURES['image']:
-            st.write("Upload Media")
             uploaded_image = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "gif"])
             uploaded_video = st.file_uploader("Upload Video", type=["mp4", "webm", "ogg"])
         else:
@@ -307,13 +273,8 @@ def main():
             user_input = suggestion
             break
     
-    # Handle voice input
-    if voice_input and not st.session_state.voice_input and OPTIONAL_FEATURES['voice']:
-        user_input = handle_voice_input()
-        st.session_state.voice_input = False
-    else:
-        # Chat input
-        user_input = st.chat_input("Type your message here...")
+    # Chat input
+    user_input = st.chat_input("Type your message here...")
     
     if user_input:
         # Prepare media content
