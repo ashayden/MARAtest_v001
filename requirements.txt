@@ -1,5 +1,12 @@
 streamlit>=1.31.0
 google-generativeai>=0.3.2
 python-dotenv>=1.0.0
-langchain>=0.1.0
-langchain-google-genai>=0.0.5 
+SpeechRecognition>=3.10.0
+gTTS>=2.5.0
+Pillow>=10.0.0
+pandas>=2.0.0
+openpyxl>=3.0.0
+fpdf>=1.7.2
+PyAudio>=0.2.13  # Required for speech_recognition
+python-magic>=0.4.27  # For file type detection
+markdown>=3.5.0  # For markdown processing 

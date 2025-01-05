@@ -4,18 +4,67 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from agents.technical_expert import ResponseAgent
 import time
-import speech_recognition as sr
-from gtts import gTTS
 import io
 import base64
-from PIL import Image
-import pandas as pd
-from fpdf import FPDF
-import tempfile
+from typing import Optional, Dict, Any
 
 # Load environment variables
 load_dotenv()
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+
+# Optional imports with error handling
+OPTIONAL_FEATURES = {
+    'voice': False,
+    'image': False,
+    'spreadsheet': False,
+    'pdf': False
+}
+
+try:
+    import speech_recognition as sr
+    from gtts import gTTS
+    OPTIONAL_FEATURES['voice'] = True
+except ImportError:
+    st.sidebar.warning("""
+    Voice features are disabled. To enable voice features, install required packages:
+    ```bash
+    pip install SpeechRecognition gTTS PyAudio
+    ```
+    """)
+
+try:
+    from PIL import Image
+    OPTIONAL_FEATURES['image'] = True
+except ImportError:
+    st.sidebar.warning("""
+    Image features are disabled. To enable image features, install:
+    ```bash
+    pip install Pillow
+    ```
+    """)
+
+try:
+    import pandas as pd
+    import openpyxl
+    OPTIONAL_FEATURES['spreadsheet'] = True
+except ImportError:
+    st.sidebar.warning("""
+    Spreadsheet export is disabled. To enable, install:
+    ```bash
+    pip install pandas openpyxl
+    ```
+    """)
+
+try:
+    from fpdf import FPDF
+    OPTIONAL_FEATURES['pdf'] = True
+except ImportError:
+    st.sidebar.warning("""
+    PDF export is disabled. To enable, install:
+    ```bash
+    pip install fpdf
+    ```
+    """)
 
 # Custom CSS for animations and styling
 st.markdown("""
@@ -80,52 +129,68 @@ def initialize_session_state():
     if 'voice_input' not in st.session_state:
         st.session_state.voice_input = False
 
-def convert_to_pdf(content: str) -> bytes:
+def convert_to_pdf(content: str) -> Optional[bytes]:
     """Convert content to PDF format."""
+    if not OPTIONAL_FEATURES['pdf']:
+        return None
+    
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     pdf.multi_cell(0, 10, txt=content)
     return pdf.output(dest='S').encode('latin-1')
 
-def convert_to_spreadsheet(content: str) -> bytes:
+def convert_to_spreadsheet(content: str) -> Optional[bytes]:
     """Convert content to spreadsheet format."""
-    # Simple conversion - could be enhanced based on content structure
+    if not OPTIONAL_FEATURES['spreadsheet']:
+        return None
+    
     df = pd.DataFrame([content.split('\n')])
     buffer = io.BytesIO()
     df.to_excel(buffer, index=False)
     return buffer.getvalue()
 
-def get_download_link(content: str, format: str) -> str:
+def get_download_link(content: str, format: str) -> Optional[str]:
     """Generate download link for content in specified format."""
-    if format == "pdf":
-        b64 = base64.b64encode(convert_to_pdf(content)).decode()
-        return f'<a href="data:application/pdf;base64,{b64}" download="response.pdf">Download PDF</a>'
-    elif format == "markdown":
-        b64 = base64.b64encode(content.encode()).decode()
-        return f'<a href="data:text/markdown;base64,{b64}" download="response.md">Download Markdown</a>'
-    elif format == "txt":
-        b64 = base64.b64encode(content.encode()).decode()
-        return f'<a href="data:text/plain;base64,{b64}" download="response.txt">Download Text</a>'
-    elif format == "spreadsheet":
-        b64 = base64.b64encode(convert_to_spreadsheet(content)).decode()
-        return f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="response.xlsx">Download Spreadsheet</a>'
+    try:
+        if format == "pdf" and OPTIONAL_FEATURES['pdf']:
+            pdf_content = convert_to_pdf(content)
+            if pdf_content:
+                b64 = base64.b64encode(pdf_content).decode()
+                return f'<a href="data:application/pdf;base64,{b64}" download="response.pdf">Download PDF</a>'
+        elif format == "markdown":
+            b64 = base64.b64encode(content.encode()).decode()
+            return f'<a href="data:text/markdown;base64,{b64}" download="response.md">Download Markdown</a>'
+        elif format == "txt":
+            b64 = base64.b64encode(content.encode()).decode()
+            return f'<a href="data:text/plain;base64,{b64}" download="response.txt">Download Text</a>'
+        elif format == "spreadsheet" and OPTIONAL_FEATURES['spreadsheet']:
+            spreadsheet_content = convert_to_spreadsheet(content)
+            if spreadsheet_content:
+                b64 = base64.b64encode(spreadsheet_content).decode()
+                return f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="response.xlsx">Download Spreadsheet</a>'
+    except Exception as e:
+        st.error(f"Error generating {format} download: {str(e)}")
+    return None
 
 def handle_voice_input() -> str:
     """Handle voice input and convert to text."""
-    r = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.write("Listening... Click 'Stop' when finished.")
-        audio = r.listen(source)
-        try:
+    if not OPTIONAL_FEATURES['voice']:
+        st.error("Voice input is not available. Please install required packages.")
+        return ""
+    
+    try:
+        r = sr.Recognizer()
+        with sr.Microphone() as source:
+            st.write("Listening... Click 'Stop' when finished.")
+            audio = r.listen(source)
             return r.recognize_google(audio)
-        except Exception as e:
-            st.error(f"Error processing voice input: {str(e)}")
-            return ""
+    except Exception as e:
+        st.error(f"Error processing voice input: {str(e)}")
+        return ""
 
 def generate_suggestions(content: str) -> list:
     """Generate follow-up suggestions based on content."""
-    # This could be enhanced with more sophisticated suggestion generation
     prompt = f"""
     Based on this content, generate 4 follow-up questions or prompts in these categories:
     1. Dig deeper into a specific aspect
@@ -136,20 +201,30 @@ def generate_suggestions(content: str) -> list:
     Content: {content}
     """
     
-    response = st.session_state.agent.generate_response(prompt, stream=False)
-    suggestions = [s.strip() for s in response.split('\n') if s.strip()]
-    return suggestions[:4]
+    try:
+        response = st.session_state.agent.generate_response(prompt, stream=False)
+        suggestions = [s.strip() for s in response.split('\n') if s.strip()]
+        return suggestions[:4]
+    except Exception as e:
+        st.error(f"Error generating suggestions: {str(e)}")
+        return []
 
-def display_chat_message(message: str, is_user: bool, media_content: dict = None):
+def display_chat_message(message: str, is_user: bool, media_content: Optional[Dict[str, Any]] = None):
     """Display a chat message with animation and optional media content."""
     message_type = "user" if is_user else "bot"
     
-    # Display media content if present
-    if media_content:
+    # Display media content if present and supported
+    if media_content and OPTIONAL_FEATURES['image']:
         if media_content.get('image'):
-            st.image(media_content['image'])
+            try:
+                st.image(media_content['image'])
+            except Exception as e:
+                st.error(f"Error displaying image: {str(e)}")
         if media_content.get('video'):
-            st.video(media_content['video'])
+            try:
+                st.video(media_content['video'])
+            except Exception as e:
+                st.error(f"Error displaying video: {str(e)}")
     
     # Display message
     st.markdown(
@@ -160,24 +235,31 @@ def display_chat_message(message: str, is_user: bool, media_content: dict = None
     # Display download options and suggestions for bot messages
     if not is_user:
         # Download options
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.markdown(get_download_link(message, "pdf"), unsafe_allow_html=True)
-        with col2:
-            st.markdown(get_download_link(message, "markdown"), unsafe_allow_html=True)
-        with col3:
-            st.markdown(get_download_link(message, "txt"), unsafe_allow_html=True)
-        with col4:
-            st.markdown(get_download_link(message, "spreadsheet"), unsafe_allow_html=True)
+        download_formats = [
+            ("pdf", OPTIONAL_FEATURES['pdf']),
+            ("markdown", True),
+            ("txt", True),
+            ("spreadsheet", OPTIONAL_FEATURES['spreadsheet'])
+        ]
+        
+        enabled_formats = [f for f, enabled in download_formats if enabled]
+        if enabled_formats:
+            cols = st.columns(len(enabled_formats))
+            for col, format in zip(cols, enabled_formats):
+                with col:
+                    link = get_download_link(message, format)
+                    if link:
+                        st.markdown(link, unsafe_allow_html=True)
         
         # Generate and display suggestions
         suggestions = generate_suggestions(message)
-        st.write("Follow-up suggestions:")
-        cols = st.columns(len(suggestions))
-        for i, (col, suggestion) in enumerate(zip(cols, suggestions)):
-            with col:
-                if st.button(suggestion, key=f"suggestion_{i}"):
-                    return suggestion
+        if suggestions:
+            st.write("Follow-up suggestions:")
+            cols = st.columns(len(suggestions))
+            for i, (col, suggestion) in enumerate(zip(cols, suggestions)):
+                with col:
+                    if st.button(suggestion, key=f"suggestion_{i}"):
+                        return suggestion
     
     return None
 
@@ -204,11 +286,15 @@ def main():
     # Sidebar controls
     with st.sidebar:
         st.write("Input Options")
-        voice_input = st.toggle("Voice Input", value=st.session_state.voice_input)
+        voice_input = st.toggle("Voice Input", value=st.session_state.voice_input, disabled=not OPTIONAL_FEATURES['voice'])
         
-        st.write("Upload Media")
-        uploaded_image = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "gif"])
-        uploaded_video = st.file_uploader("Upload Video", type=["mp4", "webm", "ogg"])
+        if OPTIONAL_FEATURES['image']:
+            st.write("Upload Media")
+            uploaded_image = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "gif"])
+            uploaded_video = st.file_uploader("Upload Video", type=["mp4", "webm", "ogg"])
+        else:
+            uploaded_image = None
+            uploaded_video = None
     
     # Display chat history
     for message in st.session_state.messages:
@@ -222,7 +308,7 @@ def main():
             break
     
     # Handle voice input
-    if voice_input and not st.session_state.voice_input:
+    if voice_input and not st.session_state.voice_input and OPTIONAL_FEATURES['voice']:
         user_input = handle_voice_input()
         st.session_state.voice_input = False
     else:
@@ -232,10 +318,17 @@ def main():
     if user_input:
         # Prepare media content
         media_content = {}
-        if uploaded_image:
-            media_content['image'] = Image.open(uploaded_image)
-        if uploaded_video:
-            media_content['video'] = uploaded_video.read()
+        if OPTIONAL_FEATURES['image']:
+            if uploaded_image:
+                try:
+                    media_content['image'] = Image.open(uploaded_image)
+                except Exception as e:
+                    st.error(f"Error processing image: {str(e)}")
+            if uploaded_video:
+                try:
+                    media_content['video'] = uploaded_video.read()
+                except Exception as e:
+                    st.error(f"Error processing video: {str(e)}")
         
         # Display user message
         display_chat_message(user_input, True, media_content)
@@ -253,18 +346,21 @@ def main():
         # Reset current response
         st.session_state.current_response = ''
         
-        # Generate response
-        response = st.session_state.agent.generate_response(
-            user_input,
-            stream=True,
-            stream_callback=stream_callback
-        )
-        
-        # Add response to chat history
-        st.session_state.messages.append({
-            'content': response,
-            'is_user': False
-        })
+        try:
+            # Generate response
+            response = st.session_state.agent.generate_response(
+                user_input,
+                stream=True,
+                stream_callback=stream_callback
+            )
+            
+            # Add response to chat history
+            st.session_state.messages.append({
+                'content': response,
+                'is_user': False
+            })
+        except Exception as e:
+            st.error(f"Error generating response: {str(e)}")
 
 if __name__ == "__main__":
     main() 
