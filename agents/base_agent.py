@@ -19,8 +19,8 @@ class BaseAgent:
         
         # Response generation uses lower temperature for more focused output
         self.response_config = {
-            'temperature': 0.3,
-            'top_p': 0.9,
+            'temperature': 0.2,  # Even lower for more precise responses
+            'top_p': 0.95,
             'top_k': 40,
             'max_output_tokens': 2048,
         }
@@ -51,18 +51,21 @@ class BaseAgent:
             )
             
             # Second call for concise, focused response
-            response_prompt = f"""Based on the following analysis, provide a clear, concise response.
-            Focus on the key points and avoid repeating the thought process.
+            response_prompt = f"""Using the analysis below, write a clear and direct response.
+            Do not mention the analysis process or include phrases like "based on the analysis" or "the user wants."
+            Focus only on presenting the information itself.
             
             Analysis: {thought_response.text}
             
             Question: {prompt}
             
-            Remember:
-            1. Be direct and concise
-            2. Focus on concrete information
-            3. Avoid mentioning the thought process itself
-            4. Structure the response clearly
+            Requirements:
+            1. Start immediately with the relevant information
+            2. Use clear, direct statements
+            3. Organize information logically
+            4. Be concise but complete
+            5. Do not repeat information
+            6. Do not include meta-commentary about the response itself
             """
             
             response = self.model.generate_content(
@@ -117,18 +120,21 @@ class BaseAgent:
                     yield chunk.text, ""
             
             # Stream response based on thoughts
-            response_prompt = f"""Based on the following analysis, provide a clear, concise response.
-            Focus on the key points and avoid repeating the thought process.
+            response_prompt = f"""Using the analysis below, write a clear and direct response.
+            Do not mention the analysis process or include phrases like "based on the analysis" or "the user wants."
+            Focus only on presenting the information itself.
             
             Analysis: {thought_response}
             
             Question: {prompt}
             
-            Remember:
-            1. Be direct and concise
-            2. Focus on concrete information
-            3. Avoid mentioning the thought process itself
-            4. Structure the response clearly
+            Requirements:
+            1. Start immediately with the relevant information
+            2. Use clear, direct statements
+            3. Organize information logically
+            4. Be concise but complete
+            5. Do not repeat information
+            6. Do not include meta-commentary about the response itself
             """
             
             response_stream = self.model.generate_content(
