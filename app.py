@@ -453,102 +453,113 @@ def main():
     # Initialize session state
     initialize_session_state()
     
-    # Display chat history
-    for message in st.session_state.messages:
-        suggestion = display_chat_message(
-            message['content'],
-            message['is_user'],
-            message.get('media_content')
-        )
-        if suggestion:
-            user_input = suggestion
-            break
+    # Chat container for history
+    chat_container = st.container()
     
-    # Chat input container
+    # Input container at the bottom
     input_container = st.container()
     
+    with chat_container:
+        # Display chat history
+        for message in st.session_state.messages:
+            display_chat_message(
+                message['content'],
+                message['is_user'],
+                message.get('media_content')
+            )
+    
     with input_container:
-        # Create a more streamlined input area
-        st.markdown("""
-        <style>
-        .stTextInput > div > div > input {
-            background-color: #2d2d2d;
-            color: white;
-            border: none;
-            border-radius: 20px;
-            padding: 8px 16px;
-            height: 40px;
-        }
-        .stTextInput > div > div > input:focus {
-            box-shadow: none;
-            border-color: #2196F3;
-        }
-        .upload-container {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-        cols = st.columns([0.08, 0.92])
+        # Create two columns: one narrow for upload, one wide for text input
+        col1, col2 = st.columns([0.15, 0.85])
         
-        with cols[0]:
-            uploaded_content = display_upload_options()
-        
-        with cols[1]:
-            user_input = st.chat_input(
-                "Type your message here...",
-                key="chat_input"
-            )
-
-    if user_input:
-        # Display user message
-        display_chat_message(user_input, True, uploaded_content)
-        
-        # Add to chat history
-        st.session_state.messages.append({
-            'content': user_input,
-            'is_user': True,
-            'media_content': uploaded_content
-        })
-        
-        # Create placeholder for bot response
-        st.session_state.message_placeholder = st.empty()
-        
-        # Reset current response
-        st.session_state.current_response = ''
-        
-        try:
-            # Prepare message for Gemini
-            message_parts = prepare_gemini_message(user_input, uploaded_content)
-            
-            # Generate response using Gemini
-            model = genai.GenerativeModel('gemini-pro-vision' if uploaded_content and uploaded_content.get('type') == 'image' else 'gemini-pro')
-            response = model.generate_content(
-                message_parts,
-                stream=True,
-                generation_config={
-                    'temperature': 0.7,
-                    'top_p': 0.95,
-                    'top_k': 40,
-                    'max_output_tokens': 2048,
-                }
+        # Handle file uploads in the first column
+        with col1:
+            uploaded_content = None
+            upload_type = st.selectbox(
+                "",
+                options=["➕", "🖼️ Image", "📎 Files"],
+                key="upload_selector",
+                label_visibility="collapsed"
             )
             
-            final_response = ""
-            for chunk in response:
-                if chunk.text:
-                    final_response += chunk.text
-                    stream_callback(chunk.text)
+            if upload_type == "🖼️ Image":
+                uploaded_file = st.file_uploader(
+                    "Upload Image",
+                    type=["png", "jpg", "jpeg", "gif"],
+                    key="image_uploader",
+                    label_visibility="collapsed"
+                )
+                if uploaded_file:
+                    uploaded_content = process_uploaded_file(uploaded_file)
             
-            # Add response to chat history
-            st.session_state.messages.append({
-                'content': final_response,
-                'is_user': False
-            })
-        except Exception as e:
-            st.error(f"Error generating response: {str(e)}")
+            elif upload_type == "📎 Files":
+                uploaded_file = st.file_uploader(
+                    "Upload File",
+                    type=["txt", "pdf", "doc", "docx"],
+                    key="file_uploader",
+                    label_visibility="collapsed"
+                )
+                if uploaded_file:
+                    uploaded_content = process_uploaded_file(uploaded_file)
+        
+        # Handle text input in the second column
+        with col2:
+            user_input = st.text_input(
+                "Message",
+                key="user_input",
+                label_visibility="collapsed",
+                placeholder="Type your message here..."
+            )
+            
+            # Add a send button
+            if st.button("Send", key="send_button") or user_input:
+                if user_input:  # Only process if there's actual input
+                    # Display user message
+                    display_chat_message(user_input, True, uploaded_content)
+                    
+                    # Add to chat history
+                    st.session_state.messages.append({
+                        'content': user_input,
+                        'is_user': True,
+                        'media_content': uploaded_content
+                    })
+                    
+                    try:
+                        # Prepare message for Gemini
+                        message_parts = prepare_gemini_message(user_input, uploaded_content)
+                        
+                        # Generate response using Gemini
+                        model = genai.GenerativeModel('gemini-pro-vision' if uploaded_content and uploaded_content.get('type') == 'image' else 'gemini-pro')
+                        response = model.generate_content(
+                            message_parts,
+                            generation_config={
+                                'temperature': 0.7,
+                                'top_p': 0.95,
+                                'top_k': 40,
+                                'max_output_tokens': 2048,
+                            }
+                        )
+                        
+                        # Get the response text
+                        final_response = response.text
+                        
+                        # Display bot response
+                        display_chat_message(final_response, False)
+                        
+                        # Add response to chat history
+                        st.session_state.messages.append({
+                            'content': final_response,
+                            'is_user': False
+                        })
+                        
+                        # Clear the input
+                        st.session_state.user_input = ""
+                        
+                    except Exception as e:
+                        st.error(f"Error generating response: {str(e)}")
+                        
+                    # Rerun to clear the input and update the chat
+                    st.rerun()
 
 if __name__ == "__main__":
     main() 
