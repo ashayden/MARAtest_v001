@@ -1,119 +1,110 @@
 from .base_template import AgentTemplate
 from typing import Dict, Any
 
-class TechnicalExpertAgent(AgentTemplate):
-    """Specialized agent for technical documentation and explanations."""
+class ResponseAgent(AgentTemplate):
+    """General-purpose agent for structured responses."""
     
-    def __init__(self, domain: str = "software development"):
-        """
-        Initialize the technical expert agent.
-        
-        Args:
-            domain: Specific technical domain of expertise
-        """
-        # Define technical expert persona
+    def __init__(self):
+        """Initialize the response agent."""
+        # Define general persona
         persona = {
-            'tone': 'technical but accessible',
-            'style': 'detailed and precise',
-            'expertise_level': f'expert in {domain}',
-            'communication_style': 'structured and methodical'
+            'tone': 'clear and informative',
+            'style': 'well-structured',
+            'expertise_level': 'knowledgeable',
+            'communication_style': 'engaging and precise'
         }
         
-        # Custom instructions for technical content
-        custom_instructions = f"""
-        As a technical expert in {domain}, focus on:
+        # General instructions for structured responses
+        custom_instructions = """
+        Provide comprehensive responses that:
         
-        1. Technical Accuracy:
-           - Use precise terminology
-           - Provide accurate technical details
-           - Include code examples when relevant
-           - Cite best practices and standards
+        1. Information Quality:
+           - Present accurate information
+           - Include relevant details
+           - Support claims with evidence
+           - Maintain objectivity
         
-        2. Explanation Structure:
-           - Start with high-level concepts
-           - Break down complex topics
-           - Include practical examples
-           - Address common pitfalls
+        2. Organization:
+           - Present logical flow of ideas
+           - Use clear categorization
+           - Provide smooth transitions
+           - Maintain consistent structure
         
-        3. Implementation Guidance:
-           - Step-by-step instructions
-           - Configuration details
-           - Performance considerations
-           - Security implications
+        3. Engagement:
+           - Use clear language
+           - Provide relevant examples
+           - Address key aspects
+           - Maintain reader interest
         
-        4. Documentation Standards:
-           - Clear code comments
-           - API documentation style
-           - Technical diagrams (described in markdown)
-           - Version compatibility notes
+        4. Presentation:
+           - Use appropriate formatting
+           - Include section headers
+           - Highlight key points
+           - Ensure readability
         
         Response Format:
-        # Main Topic
-        Brief overview of the technical concept
+        # Topic Overview
+        Clear introduction to the subject
         
-        ## Technical Background
-        Essential background information and context
+        ## Background
+        Context and foundational information
         
-        ## Implementation Details
-        - Specific steps or components
-        - Code examples or configurations
-        - Best practices
+        ## Key Points
+        - Main aspects
+        - Important details
+        - Notable features
+        - Significant elements
         
-        ## Common Challenges
-        Known issues and solutions
+        ## Analysis
+        Deeper examination of the topic
         
-        ## Best Practices
-        Recommended approaches and standards
+        ## Practical Relevance
+        Real-world applications or implications
         
-        ## Additional Resources
-        Related documentation or references
+        ## Further Information
+        Additional resources or references
         """
         
-        # Initialize with technical configuration
+        # Initialize with balanced configuration
         super().__init__(
-            temperature=0.3,  # Lower temperature for technical precision
+            temperature=0.7,  # Balanced for general responses
             persona=persona,
             custom_instructions=custom_instructions
         )
     
     def preprocess_input(self, prompt: str) -> str:
         """
-        Preprocess the input prompt for technical context.
+        Preprocess the input prompt.
         
         Args:
-            prompt: User's technical question
+            prompt: User's query
             
         Returns:
-            str: Processed prompt with technical context
+            str: Processed prompt
         """
-        # Add technical context markers
         return f"""
-        Technical Query:
+        Query:
         {prompt}
         
         Required:
-        - Technical accuracy
-        - Practical examples
-        - Implementation details
-        - Best practices
+        - Comprehensive coverage
+        - Clear structure
+        - Relevant details
+        - Balanced perspective
         """
     
     def postprocess_response(self, response: str) -> str:
         """
-        Postprocess the response to ensure technical formatting.
+        Postprocess the response for consistent formatting.
         
         Args:
             response: Raw response from the model
             
         Returns:
-            str: Formatted technical response
+            str: Formatted response
         """
         # Ensure proper markdown formatting
         if not response.startswith('#'):
-            response = f"# Technical Response\n\n{response}"
-        
-        # Add technical disclaimer if not present
-        if "Note:" not in response:
-            response += "\n\n**Note:** Always refer to official documentation and verify compatibility with your specific environment."
+            response = f"# Response\n\n{response}"
         
         return response 

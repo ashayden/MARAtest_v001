@@ -2,7 +2,7 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
-from agents.technical_expert import TechnicalExpertAgent
+from agents.technical_expert import ResponseAgent
 import time
 
 # Load environment variables
@@ -67,7 +67,7 @@ def initialize_session_state():
     if 'messages' not in st.session_state:
         st.session_state.messages = []
     if 'agent' not in st.session_state:
-        st.session_state.agent = TechnicalExpertAgent()
+        st.session_state.agent = ResponseAgent()
 
 def display_chat_message(message: str, is_user: bool):
     """Display a chat message with animation."""
