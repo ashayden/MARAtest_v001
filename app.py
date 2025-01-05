@@ -6,6 +6,7 @@ from agents.technical_expert import ResponseAgent
 import time
 import io
 import base64
+import pyperclip
 from typing import Optional, Dict, Any
 
 # Load environment variables
@@ -178,48 +179,67 @@ def generate_suggestions(content: str) -> list:
         st.error(f"Error generating suggestions: {str(e)}")
         return []
 
+def copy_to_clipboard(text: str):
+    """Copy text to clipboard."""
+    try:
+        pyperclip.copy(text)
+        st.toast("Copied to clipboard!")
+    except Exception as e:
+        st.error(f"Error copying to clipboard: {str(e)}")
+
+def display_three_dot_menu(message: str):
+    """Display three-dot menu with options."""
+    with st.expander("⋮", expanded=False):
+        if st.button("Copy", key=f"copy_{hash(message)}"):
+            copy_to_clipboard(message)
+        
+        st.write("Download as:")
+        download_formats = [
+            ("PDF", "pdf", OPTIONAL_FEATURES['pdf']),
+            ("Markdown", "markdown", True),
+            ("Text", "txt", True),
+            ("Spreadsheet", "spreadsheet", OPTIONAL_FEATURES['spreadsheet'])
+        ]
+        
+        for label, format_type, enabled in download_formats:
+            if enabled:
+                link = get_download_link(message, format_type)
+                if link:
+                    st.markdown(link, unsafe_allow_html=True)
+
 def display_chat_message(message: str, is_user: bool, media_content: Optional[Dict[str, Any]] = None):
     """Display a chat message with animation and optional media content."""
     message_type = "user" if is_user else "bot"
     
-    # Display media content if present and supported
-    if media_content and OPTIONAL_FEATURES['image']:
-        if media_content.get('image'):
-            try:
-                st.image(media_content['image'])
-            except Exception as e:
-                st.error(f"Error displaying image: {str(e)}")
-        if media_content.get('video'):
-            try:
-                st.video(media_content['video'])
-            except Exception as e:
-                st.error(f"Error displaying video: {str(e)}")
+    # Create a container for the message and menu
+    col1, col2 = st.columns([0.95, 0.05])
     
-    # Display message
-    st.markdown(
-        f'<div class="chat-message {message_type}-message">{message}</div>',
-        unsafe_allow_html=True
-    )
+    with col1:
+        # Display media content if present and supported
+        if media_content and OPTIONAL_FEATURES['image']:
+            if media_content.get('image'):
+                try:
+                    st.image(media_content['image'])
+                except Exception as e:
+                    st.error(f"Error displaying image: {str(e)}")
+            if media_content.get('video'):
+                try:
+                    st.video(media_content['video'])
+                except Exception as e:
+                    st.error(f"Error displaying video: {str(e)}")
+        
+        # Display message
+        st.markdown(
+            f'<div class="chat-message {message_type}-message">{message}</div>',
+            unsafe_allow_html=True
+        )
     
-    # Display download options and suggestions for bot messages
+    with col2:
+        if not is_user:
+            display_three_dot_menu(message)
+    
+    # Display suggestions for bot messages
     if not is_user:
-        # Download options
-        download_formats = [
-            ("pdf", OPTIONAL_FEATURES['pdf']),
-            ("markdown", True),
-            ("txt", True),
-            ("spreadsheet", OPTIONAL_FEATURES['spreadsheet'])
-        ]
-        
-        enabled_formats = [f for f, enabled in download_formats if enabled]
-        if enabled_formats:
-            cols = st.columns(len(enabled_formats))
-            for col, format in zip(cols, enabled_formats):
-                with col:
-                    link = get_download_link(message, format)
-                    if link:
-                        st.markdown(link, unsafe_allow_html=True)
-        
         # Generate and display suggestions
         suggestions = generate_suggestions(message)
         if suggestions:
@@ -229,6 +249,25 @@ def display_chat_message(message: str, is_user: bool, media_content: Optional[Di
                 with col:
                     if st.button(suggestion, key=f"suggestion_{i}"):
                         return suggestion
+    
+    return None
+
+def display_upload_options():
+    """Display upload options in a modal."""
+    with st.expander("➕", expanded=False):
+        tabs = st.tabs(["Image", "Video", "File"])
+        
+        with tabs[0]:
+            uploaded_image = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "gif"])
+            return {"image": uploaded_image} if uploaded_image else None
+            
+        with tabs[1]:
+            uploaded_video = st.file_uploader("Upload Video", type=["mp4", "webm", "ogg"])
+            return {"video": uploaded_video} if uploaded_video else None
+            
+        with tabs[2]:
+            uploaded_file = st.file_uploader("Upload File", type=["pdf", "txt", "doc", "docx"])
+            return {"file": uploaded_file} if uploaded_file else None
     
     return None
 
@@ -252,16 +291,6 @@ def main():
     # Initialize session state
     initialize_session_state()
     
-    # Sidebar controls
-    with st.sidebar:
-        st.write("Upload Media")
-        if OPTIONAL_FEATURES['image']:
-            uploaded_image = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "gif"])
-            uploaded_video = st.file_uploader("Upload Video", type=["mp4", "webm", "ogg"])
-        else:
-            uploaded_image = None
-            uploaded_video = None
-    
     # Display chat history
     for message in st.session_state.messages:
         suggestion = display_chat_message(
@@ -273,23 +302,37 @@ def main():
             user_input = suggestion
             break
     
-    # Chat input
-    user_input = st.chat_input("Type your message here...")
+    # Chat input container
+    input_container = st.container()
+    
+    with input_container:
+        cols = st.columns([0.1, 0.9])
+        
+        with cols[0]:
+            uploaded_content = display_upload_options()
+        
+        with cols[1]:
+            user_input = st.chat_input("Type your message here...")
     
     if user_input:
         # Prepare media content
         media_content = {}
-        if OPTIONAL_FEATURES['image']:
-            if uploaded_image:
+        if OPTIONAL_FEATURES['image'] and uploaded_content:
+            if uploaded_content.get('image'):
                 try:
-                    media_content['image'] = Image.open(uploaded_image)
+                    media_content['image'] = Image.open(uploaded_content['image'])
                 except Exception as e:
                     st.error(f"Error processing image: {str(e)}")
-            if uploaded_video:
+            if uploaded_content.get('video'):
                 try:
-                    media_content['video'] = uploaded_video.read()
+                    media_content['video'] = uploaded_content['video'].read()
                 except Exception as e:
                     st.error(f"Error processing video: {str(e)}")
+            if uploaded_content.get('file'):
+                try:
+                    media_content['file'] = uploaded_content['file'].read()
+                except Exception as e:
+                    st.error(f"Error processing file: {str(e)}")
         
         # Display user message
         display_chat_message(user_input, True, media_content)
