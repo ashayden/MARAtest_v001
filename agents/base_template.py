@@ -1,5 +1,5 @@
 import google.generativeai as genai
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable
 from abc import ABC, abstractmethod
 
 class AgentTemplate(ABC):
@@ -12,15 +12,7 @@ class AgentTemplate(ABC):
         persona: Optional[Dict[str, Any]] = None,
         custom_instructions: Optional[str] = None
     ):
-        """
-        Initialize the agent template.
-        
-        Args:
-            model_name: The Gemini model to use
-            temperature: Creativity vs focus balance (0.0-1.0)
-            persona: Dictionary defining agent's personality traits
-            custom_instructions: Additional specialized instructions
-        """
+        """Initialize the agent template."""
         self.model = genai.GenerativeModel(model_name)
         
         # Default configuration
@@ -82,26 +74,27 @@ class AgentTemplate(ABC):
     
     @abstractmethod
     def preprocess_input(self, prompt: str) -> str:
-        """
-        Preprocess and validate the input prompt.
-        Must be implemented by specialized agents.
-        """
+        """Preprocess and validate the input prompt."""
         pass
     
     @abstractmethod
     def postprocess_response(self, response: str) -> str:
-        """
-        Postprocess and format the model's response.
-        Must be implemented by specialized agents.
-        """
+        """Postprocess and format the model's response."""
         pass
     
-    def generate_response(self, prompt: str) -> str:
+    def generate_response(
+        self, 
+        prompt: str,
+        stream: bool = False,
+        stream_callback: Optional[Callable[[str], None]] = None
+    ) -> str:
         """
         Generate a response using the configured model and prompts.
         
         Args:
             prompt: User input to process
+            stream: Whether to stream the response
+            stream_callback: Optional callback for streaming responses
             
         Returns:
             str: Generated response
@@ -117,14 +110,31 @@ class AgentTemplate(ABC):
             Input: {processed_prompt}
             """
             
-            # Generate response
-            response = self.model.generate_content(
-                full_prompt,
-                generation_config=self.generation_config
-            )
-            
-            # Postprocess output
-            return self.postprocess_response(response.text)
+            if stream and stream_callback:
+                # Stream response with callback
+                response_stream = self.model.generate_content(
+                    full_prompt,
+                    generation_config=self.generation_config,
+                    stream=True
+                )
+                
+                final_response = ""
+                for chunk in response_stream:
+                    if chunk.text:
+                        final_response += chunk.text
+                        stream_callback(chunk.text)
+                
+                return self.postprocess_response(final_response)
+            else:
+                # Generate complete response
+                response = self.model.generate_content(
+                    full_prompt,
+                    generation_config=self.generation_config
+                )
+                return self.postprocess_response(response.text)
             
         except Exception as e:
-            return "We're unable to process your request at the moment. Please try again." 
+            error_msg = "We're unable to process your request at the moment. Please try again."
+            if stream_callback:
+                stream_callback(error_msg)
+            return error_msg 
