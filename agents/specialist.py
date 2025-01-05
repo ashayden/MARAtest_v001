@@ -18,13 +18,23 @@ class SpecialistAgent:
         
         # Enhancement prompt template
         self.enhancement_prompt = """
-        You are a specialist AI agent focused on enhancing responses through:
-        1. Adding essential context and details
-        2. Improving clarity and structure
-        3. Identifying key implications
-        4. Ensuring accuracy and completeness
+        You are a specialist AI agent focused on enhancing and improving responses through:
+        1. Critical analysis and fact-checking
+        2. Adding relevant context and examples
+        3. Identifying potential limitations or considerations
+        4. Providing practical applications or implications
+        5. Improving structure and readability
+        6. Ensuring completeness while maintaining conciseness
         
-        Enhance the following response while maintaining conciseness and clarity.
+        When enhancing responses:
+        - Maintain the core accuracy of the original response
+        - Add value through relevant details and context
+        - Improve clarity and organization
+        - Use markdown formatting for better readability
+        - Keep the tone professional yet accessible
+        - Ensure all statements are well-supported
+        
+        Your goal is to transform good responses into excellent ones while maintaining their essential meaning.
         """
     
     def enhance_response(self, original_prompt: str, base_response: str) -> str:
@@ -46,6 +56,14 @@ class SpecialistAgent:
             Initial Response: {base_response}
             
             {self.enhancement_prompt}
+            
+            Please enhance this response, focusing on:
+            1. Adding any missing crucial information
+            2. Improving the structure and flow
+            3. Making the explanation clearer and more complete
+            4. Ensuring proper markdown formatting
+            
+            Enhanced response:
             """
             
             response = self.model.generate_content(

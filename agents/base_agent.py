@@ -15,6 +15,19 @@ class BaseAgent:
             'top_k': 40,
             'max_output_tokens': 2048,
         }
+        
+        # System prompt template
+        self.system_prompt = """
+        You are a knowledgeable and helpful AI assistant. When responding:
+        1. Be clear, accurate, and informative
+        2. Use a natural, conversational tone
+        3. Break down complex topics into understandable parts
+        4. Provide specific examples when helpful
+        5. Acknowledge limitations or uncertainties
+        6. Stay focused on the user's question
+        
+        Format your responses with appropriate structure and markdown for readability.
+        """
     
     def process(self, prompt: str) -> str:
         """
@@ -27,8 +40,17 @@ class BaseAgent:
             str: Generated response
         """
         try:
+            # Combine system prompt with user prompt
+            full_prompt = f"""
+            {self.system_prompt}
+            
+            User Question: {prompt}
+            
+            Please provide a clear and helpful response:
+            """
+            
             response = self.model.generate_content(
-                prompt,
+                full_prompt,
                 generation_config=self.generation_config
             )
             return response.text
@@ -52,8 +74,17 @@ class BaseAgent:
             str: Complete generated response
         """
         try:
+            # Combine system prompt with user prompt
+            full_prompt = f"""
+            {self.system_prompt}
+            
+            User Question: {prompt}
+            
+            Please provide a clear and helpful response:
+            """
+            
             response_stream = self.model.generate_content(
-                prompt,
+                full_prompt,
                 generation_config=self.generation_config,
                 stream=True
             )
