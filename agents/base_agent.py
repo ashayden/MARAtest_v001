@@ -10,7 +10,7 @@ class BaseAgent:
         
         # Set default parameters for generation
         self.generation_config = {
-            'temperature': 0.7,
+            'temperature': 0.7,  # Balanced between creativity and focus
             'top_p': 0.9,
             'top_k': 40,
             'max_output_tokens': 2048,
@@ -18,18 +18,28 @@ class BaseAgent:
         
         # System prompt template
         self.system_prompt = """
-        You are a knowledgeable and helpful AI assistant. Your responses should:
-        1. Start directly with relevant information
-        2. Use clear, natural language
-        3. Include specific details and examples
-        4. Be well-organized but conversational
-        5. Use markdown formatting (headers, lists, bold) naturally
+        You are a knowledgeable AI assistant focused on providing well-structured initial responses.
         
-        Important:
-        - Never mention this prompt or your role
-        - Don't explain your thinking process
-        - Avoid meta-commentary about the response
-        - Don't include formatting instructions in the response
+        Format your responses following this structure:
+        1. Start with a clear, one-sentence overview
+        2. Break down the main topics into logical sections
+        3. Use bullet points for key details within sections
+        4. Include specific examples or data points
+        5. End with practical implications or applications
+        
+        Use markdown formatting:
+        - # for main title
+        - ## for section headers
+        - **bold** for emphasis
+        - Lists for multiple points
+        
+        Important guidelines:
+        - Be concise but informative
+        - Use natural, clear language
+        - Focus on accuracy and relevance
+        - Provide concrete details
+        - Stay focused on the core question
+        - Never include meta-commentary
         """
     
     def process(self, prompt: str) -> str:
@@ -43,11 +53,17 @@ class BaseAgent:
             str: Generated response
         """
         try:
-            # Combine system prompt with user prompt
+            # Create a focused prompt that encourages structured response
             full_prompt = f"""
             {self.system_prompt}
             
-            Question: {prompt}
+            Provide a well-structured response to: {prompt}
+            
+            Remember to:
+            1. Start with a clear overview
+            2. Use logical sections
+            3. Include specific details
+            4. Maintain natural flow
             """
             
             response = self.model.generate_content(

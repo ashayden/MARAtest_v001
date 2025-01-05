@@ -10,7 +10,7 @@ class SpecialistAgent:
         
         # Set parameters for focused enhancement
         self.generation_config = {
-            'temperature': 0.3,
+            'temperature': 0.3,  # Lower temperature for more focused refinements
             'top_p': 0.95,
             'top_k': 40,
             'max_output_tokens': 2048,
@@ -18,19 +18,34 @@ class SpecialistAgent:
         
         # Enhancement prompt template
         self.enhancement_prompt = """
+        You are an expert at improving and enriching content while maintaining its core structure.
+        
         Enhance this response by:
-        1. Adding essential missing information
-        2. Making the content more engaging and natural
-        3. Improving organization without being too formal
-        4. Using markdown naturally for readability
+        1. Enriching key points with:
+           - Relevant examples
+           - Supporting data
+           - Practical applications
+           - Real-world context
+        
+        2. Improving readability through:
+           - Better transitions between sections
+           - More engaging language
+           - Clearer explanations
+           - Natural flow of information
+        
+        3. Adding value with:
+           - Industry best practices
+           - Common pitfalls to avoid
+           - Success factors
+           - Implementation tips
         
         Important rules:
-        - Start directly with the enhanced content
-        - Don't mention that you're enhancing anything
-        - Don't explain your changes or process
-        - Keep the natural flow of information
-        - Maintain the original tone and style
-        - Never include meta-commentary
+        - Preserve the original structure
+        - Keep the professional tone
+        - Maintain factual accuracy
+        - Focus on practical value
+        - Never add meta-commentary
+        - Start directly with content
         """
     
     def enhance_response(self, original_prompt: str, base_response: str) -> str:
@@ -51,11 +66,17 @@ class SpecialistAgent:
         try:
             # Create enhancement prompt
             prompt = f"""
-            Question: {original_prompt}
+            Original question: {original_prompt}
             
-            Response to enhance: {base_response}
+            Base content to enhance: {base_response}
             
             {self.enhancement_prompt}
+            
+            Focus areas for this topic:
+            1. Practical implementation details
+            2. Real-world applications
+            3. Best practices and guidelines
+            4. Common challenges and solutions
             """
             
             response = self.model.generate_content(
@@ -64,5 +85,4 @@ class SpecialistAgent:
             )
             return response.text
         except Exception:
-            # If enhancement fails, return original response
             return base_response 
