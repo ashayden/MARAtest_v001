@@ -16,6 +16,14 @@ class BaseAgent:
             'top_k': 40,
             'max_output_tokens': 2048,
         }
+        
+        # Response generation uses lower temperature for more focused output
+        self.response_config = {
+            'temperature': 0.3,
+            'top_p': 0.9,
+            'top_k': 40,
+            'max_output_tokens': 2048,
+        }
     
     def process(self, prompt: str) -> Tuple[str, str]:
         """
@@ -29,23 +37,37 @@ class BaseAgent:
         """
         try:
             # First call for detailed thought process
-            thought_prompt = f"""Think through how you would answer this question in detail, 
-            considering multiple perspectives and reasoning steps: {prompt}"""
+            thought_prompt = f"""Think through how you would answer this question. Focus on:
+            1. Key concepts and entities
+            2. Important perspectives to consider
+            3. Main arguments and evidence
+            4. Potential challenges or limitations
+            
+            Question: {prompt}"""
+            
             thought_response = self.model.generate_content(
                 thought_prompt,
                 generation_config=self.generation_config
             )
             
-            # Second call for initial response based on thoughts
-            response_prompt = f"""Based on the following thought process, provide an initial response:
+            # Second call for concise, focused response
+            response_prompt = f"""Based on the following analysis, provide a clear, concise response.
+            Focus on the key points and avoid repeating the thought process.
             
-            Thought Process: {thought_response.text}
+            Analysis: {thought_response.text}
             
             Question: {prompt}
+            
+            Remember:
+            1. Be direct and concise
+            2. Focus on concrete information
+            3. Avoid mentioning the thought process itself
+            4. Structure the response clearly
             """
+            
             response = self.model.generate_content(
                 response_prompt,
-                generation_config=self.generation_config
+                generation_config=self.response_config
             )
             
             return thought_response.text, response.text
@@ -71,8 +93,13 @@ class BaseAgent:
         """
         try:
             # Stream thought process
-            thought_prompt = f"""Think through how you would answer this question in detail, 
-            considering multiple perspectives and reasoning steps: {prompt}"""
+            thought_prompt = f"""Think through how you would answer this question. Focus on:
+            1. Key concepts and entities
+            2. Important perspectives to consider
+            3. Main arguments and evidence
+            4. Potential challenges or limitations
+            
+            Question: {prompt}"""
             
             thought_response = ""
             thought_stream = self.model.generate_content(
@@ -90,16 +117,23 @@ class BaseAgent:
                     yield chunk.text, ""
             
             # Stream response based on thoughts
-            response_prompt = f"""Based on the following thought process, provide an initial response:
+            response_prompt = f"""Based on the following analysis, provide a clear, concise response.
+            Focus on the key points and avoid repeating the thought process.
             
-            Thought Process: {thought_response}
+            Analysis: {thought_response}
             
             Question: {prompt}
+            
+            Remember:
+            1. Be direct and concise
+            2. Focus on concrete information
+            3. Avoid mentioning the thought process itself
+            4. Structure the response clearly
             """
             
             response_stream = self.model.generate_content(
                 response_prompt,
-                generation_config=self.generation_config,
+                generation_config=self.response_config,
                 stream=True
             )
             
