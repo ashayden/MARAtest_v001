@@ -255,311 +255,196 @@ def display_three_dot_menu(message: str):
                 if link:
                     st.markdown(link, unsafe_allow_html=True)
 
-def process_uploaded_file(uploaded_file) -> Optional[Dict[str, Any]]:
-    """Process uploaded file and return content in appropriate format for Gemini."""
+def process_file_upload(uploaded_file):
+    """Process uploaded file according to Gemini's capabilities."""
     if not uploaded_file:
         return None
-    
-    try:
-        mime_type, _ = mimetypes.guess_type(uploaded_file.name)
         
-        # Handle images
-        if mime_type and mime_type.startswith('image/'):
+    try:
+        # Get file info
+        file_type = uploaded_file.type
+        file_name = uploaded_file.name
+        
+        # Image handling (Gemini supports these formats)
+        if file_type in ['image/jpeg', 'image/png', 'image/gif', 'image/webp']:
             img = Image.open(uploaded_file)
-            # Convert to RGB if necessary (Gemini requires RGB)
+            # Gemini requires RGB format
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             return {
                 'type': 'image',
-                'content': img,
-                'mime_type': mime_type
+                'data': img,
+                'mime_type': file_type,
+                'name': file_name
             }
-        
-        # Handle text files
-        elif mime_type and mime_type.startswith('text/'):
-            content = uploaded_file.read().decode('utf-8')
+            
+        # Text file handling
+        elif file_type in ['text/plain', 'text/markdown', 'text/csv']:
+            text_content = uploaded_file.read().decode('utf-8')
             return {
                 'type': 'text',
-                'content': content,
-                'mime_type': mime_type
+                'data': text_content,
+                'mime_type': file_type,
+                'name': file_name
             }
-        
-        # Handle PDFs and other documents
+            
+        # PDF handling (extract text if possible)
+        elif file_type == 'application/pdf':
+            try:
+                import PyPDF2
+                pdf_reader = PyPDF2.PdfReader(uploaded_file)
+                text_content = ""
+                for page in pdf_reader.pages:
+                    text_content += page.extract_text() + "\n"
+                return {
+                    'type': 'text',
+                    'data': text_content,
+                    'mime_type': file_type,
+                    'name': file_name
+                }
+            except Exception as e:
+                st.error(f"Could not process PDF: {str(e)}")
+                return None
+                
         else:
-            return {
-                'type': 'file',
-                'content': uploaded_file.read(),
-                'mime_type': mime_type or 'application/octet-stream'
-            }
-    
+            st.warning(f"File type {file_type} is not supported by the model.")
+            return None
+            
     except Exception as e:
-        st.error(f"Error processing uploaded file: {str(e)}")
+        st.error(f"Error processing file: {str(e)}")
         return None
 
-def prepare_gemini_message(text: str, media_content: Optional[Dict[str, Any]] = None) -> list:
-    """Prepare message for Gemini model including any media content."""
-    message_parts = []
+def prepare_messages(text_input: str, file_data: dict = None) -> list:
+    """Prepare messages for the Gemini model."""
+    messages = []
     
-    # Add any media content first
-    if media_content:
-        if media_content.get('type') == 'image':
-            message_parts.append({
+    # Add file content if present
+    if file_data:
+        if file_data['type'] == 'image':
+            messages.append({
                 'type': 'image',
-                'image': media_content['content']
+                'image': file_data['data']
             })
-        elif media_content.get('type') == 'text':
-            message_parts.append({
+        elif file_data['type'] == 'text':
+            messages.append({
                 'type': 'text',
-                'text': f"Content from uploaded file:\n{media_content['content']}\n\nUser message:"
+                'text': f"Content from {file_data['name']}:\n{file_data['data']}"
             })
     
-    # Add the text content
-    message_parts.append({
-        'type': 'text',
-        'text': text
-    })
-    
-    return message_parts
-
-def display_upload_options():
-    """Display upload options in a dropdown menu."""
-    with st.container():
-        # Create a custom container for the upload menu using HTML/CSS
-        st.markdown("""
-        <style>
-        .upload-menu {
-            position: relative;
-            display: inline-block;
-        }
-        .upload-button {
-            background-color: transparent;
-            border: none;
-            color: #ffffff;
-            padding: 8px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        .upload-button:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-        .upload-options {
-            display: none;
-            position: absolute;
-            background-color: #2d2d2d;
-            min-width: 160px;
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 1;
-            border-radius: 8px;
-            padding: 8px 0;
-        }
-        .upload-option {
-            color: white;
-            padding: 12px 16px;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .upload-option:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-        .upload-icon {
-            width: 20px;
-            height: 20px;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-        # Create columns for the + button and upload options
-        col1, col2 = st.columns([0.1, 0.9])
+    # Add user's text input
+    if text_input:
+        messages.append({
+            'type': 'text',
+            'text': text_input
+        })
         
-        with col1:
-            if st.button("➕", key="upload_button"):
-                st.session_state.show_upload_options = not st.session_state.get('show_upload_options', False)
+    return messages
 
-        if st.session_state.get('show_upload_options', False):
-            with st.container():
-                options = [
-                    ("🖼️", "Image", ["png", "jpg", "jpeg", "gif"]),
-                    ("📎", "Files", ["txt", "pdf", "doc", "docx"])
-                ]
-
-                for icon, label, file_types in options:
-                    if st.button(f"{icon} {label}", key=f"upload_{label.lower()}"):
-                        uploaded_file = st.file_uploader(
-                            f"Upload {label}",
-                            type=file_types,
-                            key=f"uploader_{label.lower()}"
-                        )
-                        if uploaded_file:
-                            return process_uploaded_file(uploaded_file)
-    return None
-
-def stream_callback(chunk: str):
-    """Callback function for streaming responses."""
-    if 'current_response' not in st.session_state:
-        st.session_state.current_response = ''
-    
-    st.session_state.current_response += chunk
-    
-    if 'message_placeholder' in st.session_state:
-        st.session_state.message_placeholder.markdown(
-            f'<div class="chat-message bot-message">{st.session_state.current_response}</div>',
-            unsafe_allow_html=True
-        )
-
-def display_chat_message(message: str, is_user: bool, media_content: Optional[Dict[str, Any]] = None):
-    """Display a chat message with animation and optional media content."""
-    message_type = "user" if is_user else "bot"
-    
-    # Create a container for the message and menu
-    col1, col2 = st.columns([0.95, 0.05])
-    
-    with col1:
-        # Display media content if present
-        if media_content and media_content.get('type') == 'image':
-            try:
-                st.image(media_content['content'])
-            except Exception as e:
-                st.error(f"Error displaying image: {str(e)}")
-        
-        # Display message
-        st.markdown(
-            f'<div class="chat-message {message_type}-message">{message}</div>',
-            unsafe_allow_html=True
-        )
-    
-    with col2:
-        if not is_user:
-            display_three_dot_menu(message)
-    
-    # Display suggestions for bot messages
-    if not is_user:
-        suggestions = generate_suggestions(message)
-        if suggestions:
-            st.write("Follow-up suggestions:")
-            cols = st.columns(len(suggestions))
-            for i, (col, suggestion) in enumerate(zip(cols, suggestions)):
-                with col:
-                    if st.button(suggestion, key=f"suggestion_{i}"):
-                        return suggestion
-    
-    return None
-
-def main():
+def chat_interface():
+    """Main chat interface with file upload and input handling."""
     st.title("AI Assistant")
-    st.markdown("---")
     
     # Initialize session state
-    initialize_session_state()
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
     
-    # Chat container for history
-    chat_container = st.container()
+    # Chat history display
+    for msg in st.session_state.messages:
+        with st.container():
+            if msg['role'] == 'user':
+                st.markdown(f"🧑 **You**: {msg['content']}")
+                if msg.get('file_data'):
+                    if msg['file_data']['type'] == 'image':
+                        st.image(msg['file_data']['data'], caption=msg['file_data']['name'])
+                    elif msg['file_data']['type'] == 'text':
+                        with st.expander(f"📄 {msg['file_data']['name']}"):
+                            st.text(msg['file_data']['data'])
+            else:
+                st.markdown(f"🤖 **Assistant**: {msg['content']}")
     
-    # Input container at the bottom
-    input_container = st.container()
-    
-    with chat_container:
-        # Display chat history
-        for message in st.session_state.messages:
-            display_chat_message(
-                message['content'],
-                message['is_user'],
-                message.get('media_content')
-            )
-    
-    with input_container:
-        # Create two columns: one narrow for upload, one wide for text input
-        col1, col2 = st.columns([0.15, 0.85])
+    # Input area
+    with st.container():
+        # File upload
+        uploaded_file = st.file_uploader(
+            "Upload a file (images, text, PDF)",
+            type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+            help="The model can process images, text files, and PDFs"
+        )
         
-        # Handle file uploads in the first column
+        # Process uploaded file
+        file_data = None
+        if uploaded_file:
+            file_data = process_file_upload(uploaded_file)
+            if file_data:
+                st.success(f"File '{file_data['name']}' processed successfully!")
+        
+        # Text input and send button
+        col1, col2 = st.columns([0.85, 0.15])
         with col1:
-            uploaded_content = None
-            upload_type = st.selectbox(
-                "",
-                options=["➕", "🖼️ Image", "📎 Files"],
-                key="upload_selector",
+            user_input = st.text_input(
+                "Your message",
+                key="user_input",
+                placeholder="Type your message here...",
                 label_visibility="collapsed"
             )
-            
-            if upload_type == "🖼️ Image":
-                uploaded_file = st.file_uploader(
-                    "Upload Image",
-                    type=["png", "jpg", "jpeg", "gif"],
-                    key="image_uploader",
-                    label_visibility="collapsed"
-                )
-                if uploaded_file:
-                    uploaded_content = process_uploaded_file(uploaded_file)
-            
-            elif upload_type == "📎 Files":
-                uploaded_file = st.file_uploader(
-                    "Upload File",
-                    type=["txt", "pdf", "doc", "docx"],
-                    key="file_uploader",
-                    label_visibility="collapsed"
-                )
-                if uploaded_file:
-                    uploaded_content = process_uploaded_file(uploaded_file)
-        
-        # Handle text input in the second column
         with col2:
-            user_input = st.text_input(
-                "Message",
-                key="user_input",
-                label_visibility="collapsed",
-                placeholder="Type your message here..."
-            )
+            send_button = st.button("Send", use_container_width=True)
+        
+        # Handle input submission
+        if send_button or (user_input and len(user_input.strip()) > 0):
+            if not user_input and not file_data:
+                st.warning("Please enter a message or upload a file.")
+                return
             
-            # Add a send button
-            if st.button("Send", key="send_button") or user_input:
-                if user_input:  # Only process if there's actual input
-                    # Display user message
-                    display_chat_message(user_input, True, uploaded_content)
-                    
-                    # Add to chat history
-                    st.session_state.messages.append({
-                        'content': user_input,
-                        'is_user': True,
-                        'media_content': uploaded_content
-                    })
-                    
-                    try:
-                        # Prepare message for Gemini
-                        message_parts = prepare_gemini_message(user_input, uploaded_content)
-                        
-                        # Generate response using Gemini
-                        model = genai.GenerativeModel('gemini-pro-vision' if uploaded_content and uploaded_content.get('type') == 'image' else 'gemini-pro')
-                        response = model.generate_content(
-                            message_parts,
-                            generation_config={
-                                'temperature': 0.7,
-                                'top_p': 0.95,
-                                'top_k': 40,
-                                'max_output_tokens': 2048,
-                            }
-                        )
-                        
-                        # Get the response text
-                        final_response = response.text
-                        
-                        # Display bot response
-                        display_chat_message(final_response, False)
-                        
-                        # Add response to chat history
-                        st.session_state.messages.append({
-                            'content': final_response,
-                            'is_user': False
-                        })
-                        
-                        # Clear the input
-                        st.session_state.user_input = ""
-                        
-                    except Exception as e:
-                        st.error(f"Error generating response: {str(e)}")
-                        
-                    # Rerun to clear the input and update the chat
-                    st.rerun()
+            # Prepare messages for the model
+            messages = prepare_messages(user_input, file_data)
+            
+            # Add to chat history
+            st.session_state.messages.append({
+                'role': 'user',
+                'content': user_input if user_input else "Uploaded file for analysis",
+                'file_data': file_data
+            })
+            
+            try:
+                # Select appropriate model based on content
+                model_name = 'gemini-pro-vision' if file_data and file_data['type'] == 'image' else 'gemini-pro'
+                model = genai.GenerativeModel(model_name)
+                
+                # Generate response
+                response = model.generate_content(
+                    messages,
+                    generation_config={
+                        'temperature': 0.7,
+                        'top_p': 0.95,
+                        'top_k': 40,
+                        'max_output_tokens': 2048,
+                    }
+                )
+                
+                # Add response to chat history
+                st.session_state.messages.append({
+                    'role': 'assistant',
+                    'content': response.text
+                })
+                
+                # Clear input
+                st.session_state.user_input = ""
+                
+                # Rerun to update the display
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Error generating response: {str(e)}")
 
 if __name__ == "__main__":
-    main() 
+    # Load environment variables
+    load_dotenv()
+    
+    # Configure Gemini
+    api_key = os.getenv('GOOGLE_API_KEY')
+    if not api_key:
+        st.error("Please set your GOOGLE_API_KEY in the .env file")
+    else:
+        genai.configure(api_key=api_key)
+        chat_interface() 
