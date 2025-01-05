@@ -6,40 +6,41 @@ class SpecialistAgent:
     
     def __init__(self):
         """Initialize the specialist agent with Gemini model."""
-        self.model = genai.GenerativeModel('gemini-2.0-flash-thinking-exp-1219')
+        # Initialize with the fast flash model for quick enhancements
+        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
         
-        # Set parameters for more focused and analytical responses
+        # Set parameters for more focused and precise responses
         self.generation_config = {
-            'temperature': 0.3,  # Lower temperature for more focused outputs
-            'top_p': 0.9,
+            'temperature': 0.2,  # Lower temperature for more focused outputs
+            'top_p': 0.95,
             'top_k': 40,
             'max_output_tokens': 2048,
         }
         
-        # System prompts for enhanced reasoning
+        # System prompts for enhancement
         self.thought_system_prompt = """
-        You are a specialist AI agent focused on analyzing and improving thought processes through:
-        1. Identifying key reasoning patterns and strategies
-        2. Highlighting important considerations and assumptions
-        3. Suggesting alternative perspectives or approaches
-        4. Evaluating the completeness and logic of the thinking process
+        You are a specialist AI agent focused on quickly identifying and highlighting the key points in a thought process:
+        1. Core reasoning patterns and strategies
+        2. Critical assumptions and considerations
+        3. Key insights and perspectives
+        4. Areas for potential improvement
         
-        Analyze the given thought process and enhance it while maintaining clarity and structure.
+        Provide a concise analysis that maintains the essential logic while improving clarity.
         """
         
         self.response_system_prompt = """
-        You are a specialist AI agent focused on enhancing and improving responses through:
-        1. Critical analysis and fact-checking
-        2. Adding relevant context and examples
-        3. Identifying potential limitations or considerations
-        4. Providing practical applications or implications
+        You are a specialist AI agent focused on rapidly enhancing responses through:
+        1. Precise fact-checking and verification
+        2. Adding essential context
+        3. Identifying key limitations
+        4. Highlighting practical implications
         
-        Analyze the given response and enhance it while maintaining clarity and conciseness.
+        Provide a clear, concise enhancement that maintains accuracy while improving impact.
         """
     
     def enhance_response(self, original_prompt: str, base_outputs: Tuple[str, str]) -> Tuple[str, str]:
         """
-        Enhance both the thought process and final response.
+        Enhance both the thought process and final response with quick, focused improvements.
         
         Args:
             original_prompt (str): Original user prompt
@@ -51,15 +52,15 @@ class SpecialistAgent:
         base_thoughts, base_response = base_outputs
         
         try:
-            # Enhance thought process
+            # Quick enhancement of thought process
             thought_enhancement_prompt = f"""
-            Original User Question: {original_prompt}
+            Original Question: {original_prompt}
             
-            Original Thought Process: {base_thoughts}
+            Detailed Thought Process: {base_thoughts}
             
             {self.thought_system_prompt}
             
-            Please provide an enhanced thought process that builds upon and improves the original thinking.
+            Provide a focused enhancement that highlights the key reasoning while improving clarity.
             """
             
             enhanced_thoughts = self.model.generate_content(
@@ -67,17 +68,17 @@ class SpecialistAgent:
                 generation_config=self.generation_config
             ).text
             
-            # Enhance final response
+            # Quick enhancement of response
             response_enhancement_prompt = f"""
-            Original User Question: {original_prompt}
+            Original Question: {original_prompt}
             
-            Original Response: {base_response}
+            Initial Response: {base_response}
             
-            Enhanced Thought Process: {enhanced_thoughts}
+            Enhanced Thinking: {enhanced_thoughts}
             
             {self.response_system_prompt}
             
-            Please provide an enhanced response that incorporates insights from the improved thought process.
+            Provide a focused enhancement that improves clarity and impact.
             """
             
             enhanced_response = self.model.generate_content(

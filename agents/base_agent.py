@@ -6,13 +6,13 @@ class BaseAgent:
     
     def __init__(self):
         """Initialize the base agent with Gemini model."""
-        # Initialize the flash thinking model
+        # Initialize with the flash thinking model for detailed reasoning
         self.model = genai.GenerativeModel('gemini-2.0-flash-thinking-exp-1219')
         
-        # Set default parameters for generation
+        # Set default parameters for generation - higher temperature for more creative thinking
         self.generation_config = {
-            'temperature': 0.7,
-            'top_p': 0.8,
+            'temperature': 0.8,  # Increased for more detailed thinking
+            'top_p': 0.9,
             'top_k': 40,
             'max_output_tokens': 2048,
         }
@@ -28,16 +28,23 @@ class BaseAgent:
             Tuple[str, str]: A tuple containing (thought_process, final_response)
         """
         try:
-            # First call for thought process
-            thought_prompt = f"Think through how you would answer this question: {prompt}"
+            # First call for detailed thought process
+            thought_prompt = f"""Think through how you would answer this question in detail, 
+            considering multiple perspectives and reasoning steps: {prompt}"""
             thought_response = self.model.generate_content(
                 thought_prompt,
                 generation_config=self.generation_config
             )
             
-            # Second call for final response
+            # Second call for initial response based on thoughts
+            response_prompt = f"""Based on the following thought process, provide an initial response:
+            
+            Thought Process: {thought_response.text}
+            
+            Question: {prompt}
+            """
             response = self.model.generate_content(
-                prompt,
+                response_prompt,
                 generation_config=self.generation_config
             )
             
