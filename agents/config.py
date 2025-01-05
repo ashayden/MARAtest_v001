@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -6,12 +6,53 @@ class ResponseFormat(Enum):
     MARKDOWN = "markdown"
     HTML = "html"
     PLAIN = "plain"
+    PDF = "pdf"
+    SPREADSHEET = "spreadsheet"
 
 class AgentMode(Enum):
     CHAT = "chat"
     ANALYSIS = "analysis"
     REPORT = "report"
     CALCULATION = "calculation"
+    VOICE = "voice"
+
+class SuggestionType(Enum):
+    DEEP_DIVE = "deep_dive"
+    RELATED_TOPICS = "related_topics"
+    CONTINUE_CURRENT = "continue_current"
+    SURPRISING_CONNECTIONS = "surprising_connections"
+
+@dataclass
+class MediaConfig:
+    """Configuration for media handling."""
+    allowed_image_types: List[str] = field(default_factory=lambda: ["png", "jpg", "jpeg", "gif"])
+    allowed_video_types: List[str] = field(default_factory=lambda: ["mp4", "webm", "ogg"])
+    max_file_size_mb: int = 10
+    enable_image_analysis: bool = True
+    enable_video_analysis: bool = True
+
+@dataclass
+class VoiceConfig:
+    """Configuration for voice interactions."""
+    enable_voice_input: bool = True
+    enable_voice_output: bool = True
+    voice_language: str = "en-US"
+    voice_gender: str = "neutral"
+    speech_rate: float = 1.0
+    pitch: float = 1.0
+
+@dataclass
+class SuggestionsConfig:
+    """Configuration for follow-up suggestions."""
+    enable_suggestions: bool = True
+    max_suggestions: int = 4
+    suggestion_types: List[SuggestionType] = field(default_factory=lambda: [
+        SuggestionType.DEEP_DIVE,
+        SuggestionType.RELATED_TOPICS,
+        SuggestionType.CONTINUE_CURRENT,
+        SuggestionType.SURPRISING_CONNECTIONS
+    ])
+    min_confidence_score: float = 0.7
 
 @dataclass
 class AgentConfig:
@@ -31,11 +72,30 @@ class AgentConfig:
     enable_streaming: bool = True
     enable_memory: bool = True
     enable_knowledge_base: bool = False
-    enable_file_attachments: bool = False
+    enable_file_attachments: bool = True
     enable_calculations: bool = False
     enable_citations: bool = False
     enable_web_search: bool = False
     enable_data_visualization: bool = False
+    enable_voice_chat: bool = True
+    enable_suggestions: bool = True
+    
+    # Export Configuration
+    available_formats: List[ResponseFormat] = field(default_factory=lambda: [
+        ResponseFormat.MARKDOWN,
+        ResponseFormat.PDF,
+        ResponseFormat.PLAIN,
+        ResponseFormat.SPREADSHEET
+    ])
+    
+    # Media Configuration
+    media_config: MediaConfig = field(default_factory=MediaConfig)
+    
+    # Voice Configuration
+    voice_config: VoiceConfig = field(default_factory=VoiceConfig)
+    
+    # Suggestions Configuration
+    suggestions_config: SuggestionsConfig = field(default_factory=SuggestionsConfig)
     
     # Response Configuration
     response_format: ResponseFormat = ResponseFormat.MARKDOWN
