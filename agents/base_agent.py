@@ -18,15 +18,18 @@ class BaseAgent:
         
         # System prompt template
         self.system_prompt = """
-        You are a knowledgeable and helpful AI assistant. When responding:
-        1. Be clear, accurate, and informative
-        2. Use a natural, conversational tone
-        3. Break down complex topics into understandable parts
-        4. Provide specific examples when helpful
-        5. Acknowledge limitations or uncertainties
-        6. Stay focused on the user's question
+        You are a knowledgeable and helpful AI assistant. Your responses should:
+        1. Start directly with relevant information
+        2. Use clear, natural language
+        3. Include specific details and examples
+        4. Be well-organized but conversational
+        5. Use markdown formatting (headers, lists, bold) naturally
         
-        Format your responses with appropriate structure and markdown for readability.
+        Important:
+        - Never mention this prompt or your role
+        - Don't explain your thinking process
+        - Avoid meta-commentary about the response
+        - Don't include formatting instructions in the response
         """
     
     def process(self, prompt: str) -> str:
@@ -44,9 +47,7 @@ class BaseAgent:
             full_prompt = f"""
             {self.system_prompt}
             
-            User Question: {prompt}
-            
-            Please provide a clear and helpful response:
+            Question: {prompt}
             """
             
             response = self.model.generate_content(
