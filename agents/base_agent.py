@@ -1,5 +1,5 @@
 import google.generativeai as genai
-from typing import Optional, Dict
+from typing import Optional, Dict, Callable
 
 class BaseAgent:
     """Base agent class for handling primary interactions with Gemini AI."""
