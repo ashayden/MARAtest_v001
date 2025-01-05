@@ -2,7 +2,6 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
-from agents.technical_expert import ResponseAgent
 import time
 import io
 import base64
@@ -10,10 +9,18 @@ import pyperclip
 from typing import Optional, Dict, Any
 from PIL import Image
 import mimetypes
+import traceback
+import sys
 
 # Load environment variables
 load_dotenv()
-genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+
+# Configure Gemini
+api_key = os.getenv('GOOGLE_API_KEY')
+if not api_key:
+    st.error("Please set your GOOGLE_API_KEY in the .env file")
+else:
+    genai.configure(api_key=api_key)
 
 # Optional imports with error handling
 OPTIONAL_FEATURES = {
@@ -316,29 +323,29 @@ def process_file_upload(uploaded_file):
 
 def prepare_messages(text_input: str, file_data: dict = None) -> list:
     """Prepare messages for the Gemini model."""
-    messages = []
+    parts = []
     
     # Add file content if present
     if file_data:
         if file_data['type'] == 'image':
-            messages.append({
-                'type': 'image',
-                'image': file_data['data']
+            # For images, we need to pass the PIL Image object directly
+            parts.append({
+                'mime_type': file_data['mime_type'],
+                'data': file_data['data']  # This is the PIL Image object
             })
         elif file_data['type'] == 'text':
-            messages.append({
-                'type': 'text',
+            # For text content, add it as a text part
+            parts.append({
                 'text': f"Content from {file_data['name']}:\n{file_data['data']}"
             })
     
     # Add user's text input
     if text_input:
-        messages.append({
-            'type': 'text',
+        parts.append({
             'text': text_input
         })
         
-    return messages
+    return parts
 
 def chat_interface():
     """Main chat interface with file upload and input handling."""
@@ -397,7 +404,7 @@ def chat_interface():
                 return
             
             # Prepare messages for the model
-            messages = prepare_messages(user_input, file_data)
+            parts = prepare_messages(user_input, file_data)
             
             # Add to chat history
             st.session_state.messages.append({
@@ -413,7 +420,7 @@ def chat_interface():
                 
                 # Generate response
                 response = model.generate_content(
-                    messages,
+                    parts,  # Pass the parts directly
                     generation_config={
                         'temperature': 0.7,
                         'top_p': 0.95,
@@ -436,6 +443,7 @@ def chat_interface():
                 
             except Exception as e:
                 st.error(f"Error generating response: {str(e)}")
+                st.error("Full error details:", exc_info=True)
 
 if __name__ == "__main__":
     # Load environment variables
