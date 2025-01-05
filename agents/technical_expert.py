@@ -1,23 +1,61 @@
 from .base_template import AgentTemplate
-from typing import Dict, Any
+from .config import AgentConfig, AgentMode
+from typing import Optional
 
 class ResponseAgent(AgentTemplate):
     """General-purpose agent for structured responses."""
     
-    def __init__(self):
+    def __init__(self, config: Optional[AgentConfig] = None):
         """Initialize the response agent."""
-        # Define general persona
-        persona = {
-            'tone': 'clear and informative',
-            'style': 'well-structured',
-            'expertise_level': 'knowledgeable',
-            'communication_style': 'engaging and precise'
-        }
+        # Create base configuration
+        response_config = config or AgentConfig()
+        response_config.update(
+            name="AI Assistant",
+            description="General-purpose response agent",
+            mode=AgentMode.CHAT,
+            temperature=0.7,  # Balanced for general responses
+            persona={
+                'tone': 'clear and informative',
+                'style': 'well-structured',
+                'expertise_level': 'knowledgeable',
+                'communication_style': 'engaging and precise'
+            }
+        )
         
-        # General instructions for structured responses
-        custom_instructions = """
-        Provide comprehensive responses that:
+        # Add response template if not present
+        if 'structured_response' not in response_config.output_templates:
+            response_config.add_template('structured_response', """
+            # Topic Overview
+            Clear introduction to the subject
+            
+            ## Background
+            Context and foundational information
+            
+            ## Key Points
+            - Main aspects
+            - Important details
+            - Notable features
+            - Significant elements
+            
+            ## Analysis
+            Deeper examination of the topic
+            
+            ## Practical Relevance
+            Real-world applications or implications
+            
+            ## Further Information
+            Additional resources or references
+            """)
         
+        super().__init__(response_config)
+    
+    def format_prompt(self, user_input: str) -> str:
+        """Format the prompt with appropriate context."""
+        base_prompt = super().format_prompt(user_input)
+        
+        # Add response-specific context
+        response_context = """
+        Guidelines:
         1. Information Quality:
            - Present accurate information
            - Include relevant details
@@ -41,70 +79,6 @@ class ResponseAgent(AgentTemplate):
            - Include section headers
            - Highlight key points
            - Ensure readability
-        
-        Response Format:
-        # Topic Overview
-        Clear introduction to the subject
-        
-        ## Background
-        Context and foundational information
-        
-        ## Key Points
-        - Main aspects
-        - Important details
-        - Notable features
-        - Significant elements
-        
-        ## Analysis
-        Deeper examination of the topic
-        
-        ## Practical Relevance
-        Real-world applications or implications
-        
-        ## Further Information
-        Additional resources or references
         """
         
-        # Initialize with balanced configuration
-        super().__init__(
-            temperature=0.7,  # Balanced for general responses
-            persona=persona,
-            custom_instructions=custom_instructions
-        )
-    
-    def preprocess_input(self, prompt: str) -> str:
-        """
-        Preprocess the input prompt.
-        
-        Args:
-            prompt: User's query
-            
-        Returns:
-            str: Processed prompt
-        """
-        return f"""
-        Query:
-        {prompt}
-        
-        Required:
-        - Comprehensive coverage
-        - Clear structure
-        - Relevant details
-        - Balanced perspective
-        """
-    
-    def postprocess_response(self, response: str) -> str:
-        """
-        Postprocess the response for consistent formatting.
-        
-        Args:
-            response: Raw response from the model
-            
-        Returns:
-            str: Formatted response
-        """
-        # Ensure proper markdown formatting
-        if not response.startswith('#'):
-            response = f"# Response\n\n{response}"
-        
-        return response 
+        return f"{base_prompt}\n{response_context}" 
