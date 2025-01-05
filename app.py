@@ -8,6 +8,8 @@ import io
 import base64
 import pyperclip
 from typing import Optional, Dict, Any
+from PIL import Image
+import mimetypes
 
 # Load environment variables
 load_dotenv()
@@ -57,48 +59,94 @@ except ImportError:
 # Custom CSS for animations and styling
 st.markdown("""
 <style>
-/* Custom container for chat messages */
+/* Dark theme colors */
+:root {
+    --background-color: #1a1a1a;
+    --input-background: #2d2d2d;
+    --text-color: #ffffff;
+    --border-color: #404040;
+    --hover-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Main container */
+.main {
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
+
+/* Chat input styling */
+.stChatInput {
+    background-color: var(--input-background) !important;
+    border-radius: 20px !important;
+    border: 1px solid var(--border-color) !important;
+    padding: 10px 20px !important;
+}
+
+.stChatInput:focus {
+    border-color: var(--border-color) !important;
+    box-shadow: none !important;
+}
+
+/* Upload button styling */
+.upload-button {
+    background-color: transparent !important;
+    border: none !important;
+    color: var(--text-color) !important;
+    cursor: pointer !important;
+    padding: 8px !important;
+    transition: background-color 0.2s !important;
+}
+
+.upload-button:hover {
+    background-color: var(--hover-color) !important;
+}
+
+/* Upload menu styling */
+.upload-menu {
+    background-color: var(--input-background);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    padding: 8px 0;
+}
+
+.upload-option {
+    color: var(--text-color);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.upload-option:hover {
+    background-color: var(--hover-color);
+}
+
+/* Chat message styling */
 .chat-message {
     padding: 1.5rem;
     border-radius: 0.5rem;
     margin-bottom: 1rem;
+    background-color: var(--input-background);
+    border-left: 5px solid var(--border-color);
     animation: fadeIn 0.5s ease-out;
 }
 
 .user-message {
-    background-color: #2e3d49;
-    border-left: 5px solid #4CAF50;
+    border-left-color: #4CAF50;
 }
 
 .bot-message {
-    background-color: #1e2a35;
-    border-left: 5px solid #2196F3;
+    border-left-color: #2196F3;
 }
 
-/* Suggestion buttons */
-.stButton button {
-    margin: 0.2rem;
-    border-radius: 1rem;
-    background-color: rgba(33, 150, 243, 0.1);
-    border: 1px solid #2196F3;
-    transition: all 0.3s ease;
-}
+/* Hide Streamlit branding */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
 
-.stButton button:hover {
-    background-color: rgba(33, 150, 243, 0.2);
-    transform: translateY(-1px);
-}
-
-/* Media upload area */
-.upload-area {
-    border: 2px dashed #2196F3;
-    border-radius: 0.5rem;
-    padding: 1rem;
-    text-align: center;
-    margin: 1rem 0;
-}
-
-/* Fade in animation */
+/* Animations */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
@@ -207,68 +255,144 @@ def display_three_dot_menu(message: str):
                 if link:
                     st.markdown(link, unsafe_allow_html=True)
 
-def display_chat_message(message: str, is_user: bool, media_content: Optional[Dict[str, Any]] = None):
-    """Display a chat message with animation and optional media content."""
-    message_type = "user" if is_user else "bot"
+def process_uploaded_file(uploaded_file) -> Optional[Dict[str, Any]]:
+    """Process uploaded file and return content in appropriate format for Gemini."""
+    if not uploaded_file:
+        return None
     
-    # Create a container for the message and menu
-    col1, col2 = st.columns([0.95, 0.05])
-    
-    with col1:
-        # Display media content if present and supported
-        if media_content and OPTIONAL_FEATURES['image']:
-            if media_content.get('image'):
-                try:
-                    st.image(media_content['image'])
-                except Exception as e:
-                    st.error(f"Error displaying image: {str(e)}")
-            if media_content.get('video'):
-                try:
-                    st.video(media_content['video'])
-                except Exception as e:
-                    st.error(f"Error displaying video: {str(e)}")
+    try:
+        mime_type, _ = mimetypes.guess_type(uploaded_file.name)
         
-        # Display message
-        st.markdown(
-            f'<div class="chat-message {message_type}-message">{message}</div>',
-            unsafe_allow_html=True
-        )
+        # Handle images
+        if mime_type and mime_type.startswith('image/'):
+            img = Image.open(uploaded_file)
+            # Convert to RGB if necessary (Gemini requires RGB)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            return {
+                'type': 'image',
+                'content': img,
+                'mime_type': mime_type
+            }
+        
+        # Handle text files
+        elif mime_type and mime_type.startswith('text/'):
+            content = uploaded_file.read().decode('utf-8')
+            return {
+                'type': 'text',
+                'content': content,
+                'mime_type': mime_type
+            }
+        
+        # Handle PDFs and other documents
+        else:
+            return {
+                'type': 'file',
+                'content': uploaded_file.read(),
+                'mime_type': mime_type or 'application/octet-stream'
+            }
     
-    with col2:
-        if not is_user:
-            display_three_dot_menu(message)
+    except Exception as e:
+        st.error(f"Error processing uploaded file: {str(e)}")
+        return None
+
+def prepare_gemini_message(text: str, media_content: Optional[Dict[str, Any]] = None) -> list:
+    """Prepare message for Gemini model including any media content."""
+    message_parts = []
     
-    # Display suggestions for bot messages
-    if not is_user:
-        # Generate and display suggestions
-        suggestions = generate_suggestions(message)
-        if suggestions:
-            st.write("Follow-up suggestions:")
-            cols = st.columns(len(suggestions))
-            for i, (col, suggestion) in enumerate(zip(cols, suggestions)):
-                with col:
-                    if st.button(suggestion, key=f"suggestion_{i}"):
-                        return suggestion
+    # Add any media content first
+    if media_content:
+        if media_content.get('type') == 'image':
+            message_parts.append({
+                'type': 'image',
+                'image': media_content['content']
+            })
+        elif media_content.get('type') == 'text':
+            message_parts.append({
+                'type': 'text',
+                'text': f"Content from uploaded file:\n{media_content['content']}\n\nUser message:"
+            })
     
-    return None
+    # Add the text content
+    message_parts.append({
+        'type': 'text',
+        'text': text
+    })
+    
+    return message_parts
 
 def display_upload_options():
-    """Display upload options in a modal."""
-    with st.expander("➕", expanded=False):
-        tabs = st.tabs(["Image", "Video", "File"])
+    """Display upload options in a dropdown menu."""
+    with st.container():
+        # Create a custom container for the upload menu using HTML/CSS
+        st.markdown("""
+        <style>
+        .upload-menu {
+            position: relative;
+            display: inline-block;
+        }
+        .upload-button {
+            background-color: transparent;
+            border: none;
+            color: #ffffff;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .upload-button:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .upload-options {
+            display: none;
+            position: absolute;
+            background-color: #2d2d2d;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 8px;
+            padding: 8px 0;
+        }
+        .upload-option {
+            color: white;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .upload-option:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .upload-icon {
+            width: 20px;
+            height: 20px;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # Create columns for the + button and upload options
+        col1, col2 = st.columns([0.1, 0.9])
         
-        with tabs[0]:
-            uploaded_image = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "gif"])
-            return {"image": uploaded_image} if uploaded_image else None
-            
-        with tabs[1]:
-            uploaded_video = st.file_uploader("Upload Video", type=["mp4", "webm", "ogg"])
-            return {"video": uploaded_video} if uploaded_video else None
-            
-        with tabs[2]:
-            uploaded_file = st.file_uploader("Upload File", type=["pdf", "txt", "doc", "docx"])
-            return {"file": uploaded_file} if uploaded_file else None
-    
+        with col1:
+            if st.button("➕", key="upload_button"):
+                st.session_state.show_upload_options = not st.session_state.get('show_upload_options', False)
+
+        if st.session_state.get('show_upload_options', False):
+            with st.container():
+                options = [
+                    ("🖼️", "Image", ["png", "jpg", "jpeg", "gif"]),
+                    ("📎", "Files", ["txt", "pdf", "doc", "docx"])
+                ]
+
+                for icon, label, file_types in options:
+                    if st.button(f"{icon} {label}", key=f"upload_{label.lower()}"):
+                        uploaded_file = st.file_uploader(
+                            f"Upload {label}",
+                            type=file_types,
+                            key=f"uploader_{label.lower()}"
+                        )
+                        if uploaded_file:
+                            return process_uploaded_file(uploaded_file)
     return None
 
 def stream_callback(chunk: str):
@@ -283,6 +407,44 @@ def stream_callback(chunk: str):
             f'<div class="chat-message bot-message">{st.session_state.current_response}</div>',
             unsafe_allow_html=True
         )
+
+def display_chat_message(message: str, is_user: bool, media_content: Optional[Dict[str, Any]] = None):
+    """Display a chat message with animation and optional media content."""
+    message_type = "user" if is_user else "bot"
+    
+    # Create a container for the message and menu
+    col1, col2 = st.columns([0.95, 0.05])
+    
+    with col1:
+        # Display media content if present
+        if media_content and media_content.get('type') == 'image':
+            try:
+                st.image(media_content['content'])
+            except Exception as e:
+                st.error(f"Error displaying image: {str(e)}")
+        
+        # Display message
+        st.markdown(
+            f'<div class="chat-message {message_type}-message">{message}</div>',
+            unsafe_allow_html=True
+        )
+    
+    with col2:
+        if not is_user:
+            display_three_dot_menu(message)
+    
+    # Display suggestions for bot messages
+    if not is_user:
+        suggestions = generate_suggestions(message)
+        if suggestions:
+            st.write("Follow-up suggestions:")
+            cols = st.columns(len(suggestions))
+            for i, (col, suggestion) in enumerate(zip(cols, suggestions)):
+                with col:
+                    if st.button(suggestion, key=f"suggestion_{i}"):
+                        return suggestion
+    
+    return None
 
 def main():
     st.title("AI Assistant")
@@ -306,42 +468,49 @@ def main():
     input_container = st.container()
     
     with input_container:
-        cols = st.columns([0.1, 0.9])
+        # Create a more streamlined input area
+        st.markdown("""
+        <style>
+        .stTextInput > div > div > input {
+            background-color: #2d2d2d;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 8px 16px;
+            height: 40px;
+        }
+        .stTextInput > div > div > input:focus {
+            box-shadow: none;
+            border-color: #2196F3;
+        }
+        .upload-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        cols = st.columns([0.08, 0.92])
         
         with cols[0]:
             uploaded_content = display_upload_options()
         
         with cols[1]:
-            user_input = st.chat_input("Type your message here...")
-    
+            user_input = st.chat_input(
+                "Type your message here...",
+                key="chat_input"
+            )
+
     if user_input:
-        # Prepare media content
-        media_content = {}
-        if OPTIONAL_FEATURES['image'] and uploaded_content:
-            if uploaded_content.get('image'):
-                try:
-                    media_content['image'] = Image.open(uploaded_content['image'])
-                except Exception as e:
-                    st.error(f"Error processing image: {str(e)}")
-            if uploaded_content.get('video'):
-                try:
-                    media_content['video'] = uploaded_content['video'].read()
-                except Exception as e:
-                    st.error(f"Error processing video: {str(e)}")
-            if uploaded_content.get('file'):
-                try:
-                    media_content['file'] = uploaded_content['file'].read()
-                except Exception as e:
-                    st.error(f"Error processing file: {str(e)}")
-        
         # Display user message
-        display_chat_message(user_input, True, media_content)
+        display_chat_message(user_input, True, uploaded_content)
         
         # Add to chat history
         st.session_state.messages.append({
             'content': user_input,
             'is_user': True,
-            'media_content': media_content
+            'media_content': uploaded_content
         })
         
         # Create placeholder for bot response
@@ -351,16 +520,31 @@ def main():
         st.session_state.current_response = ''
         
         try:
-            # Generate response
-            response = st.session_state.agent.generate_response(
-                user_input,
+            # Prepare message for Gemini
+            message_parts = prepare_gemini_message(user_input, uploaded_content)
+            
+            # Generate response using Gemini
+            model = genai.GenerativeModel('gemini-pro-vision' if uploaded_content and uploaded_content.get('type') == 'image' else 'gemini-pro')
+            response = model.generate_content(
+                message_parts,
                 stream=True,
-                stream_callback=stream_callback
+                generation_config={
+                    'temperature': 0.7,
+                    'top_p': 0.95,
+                    'top_k': 40,
+                    'max_output_tokens': 2048,
+                }
             )
+            
+            final_response = ""
+            for chunk in response:
+                if chunk.text:
+                    final_response += chunk.text
+                    stream_callback(chunk.text)
             
             # Add response to chat history
             st.session_state.messages.append({
-                'content': response,
+                'content': final_response,
                 'is_user': False
             })
         except Exception as e:
