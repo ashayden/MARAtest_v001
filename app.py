@@ -12,19 +12,6 @@ genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 # Custom CSS for animations and styling
 st.markdown("""
 <style>
-/* Typing animation for responses */
-@keyframes typing {
-    from { width: 0 }
-    to { width: 100% }
-}
-
-/* Pulse animation for processing state */
-@keyframes pulse {
-    0% { opacity: 0.6; }
-    50% { opacity: 1; }
-    100% { opacity: 0.6; }
-}
-
 /* Custom container for chat messages */
 .chat-message {
     padding: 1.5rem;
@@ -41,17 +28,6 @@ st.markdown("""
 .bot-message {
     background-color: #1e2a35;
     border-left: 5px solid #2196F3;
-}
-
-/* Processing indicator */
-.processing-indicator {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.5rem 1rem;
-    background: rgba(33, 150, 243, 0.1);
-    border-radius: 1rem;
-    animation: pulse 1.5s infinite;
-    margin-bottom: 1rem;
 }
 
 /* Fade in animation */
@@ -117,23 +93,15 @@ def main():
         # Create placeholder for bot response
         st.session_state.message_placeholder = st.empty()
         
-        # Show processing indicator
-        with st.status("Processing...", expanded=True) as status:
-            st.write("🤔 Analyzing your request...")
-            st.markdown('<div class="processing-indicator">Generating response...</div>', unsafe_allow_html=True)
-            
-            # Reset current response
-            st.session_state.current_response = ''
-            
-            # Generate response
-            response = st.session_state.agent.generate_response(
-                user_input,
-                stream=True,
-                stream_callback=stream_callback
-            )
-            
-            # Update status
-            status.update(label="Response complete!", state="complete", expanded=False)
+        # Reset current response
+        st.session_state.current_response = ''
+        
+        # Generate response
+        response = st.session_state.agent.generate_response(
+            user_input,
+            stream=True,
+            stream_callback=stream_callback
+        )
         
         # Add response to chat history
         st.session_state.messages.append({
