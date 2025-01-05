@@ -56,7 +56,7 @@ class BaseAgent:
             )
             return response.text
         except Exception as e:
-            return f"An error occurred: {str(e)}"
+            return "We're unable to process your request at the moment. Please try again."
     
     def stream_process(
         self, 
@@ -79,9 +79,7 @@ class BaseAgent:
             full_prompt = f"""
             {self.system_prompt}
             
-            User Question: {prompt}
-            
-            Please provide a clear and helpful response:
+            Question: {prompt}
             """
             
             response_stream = self.model.generate_content(
@@ -95,11 +93,17 @@ class BaseAgent:
                 if chunk.text:
                     final_response += chunk.text
                     if stream_callback:
-                        stream_callback(chunk.text, len(final_response) / 1000)  # Rough progress estimate
+                        progress = min(len(final_response) / 1000, 0.99)  # Cap progress at 99%
+                        stream_callback(chunk.text, progress)
+            
+            # Final progress update
+            if stream_callback:
+                stream_callback("", 1.0)
+            
             return final_response
             
         except Exception as e:
-            error_msg = f"An error occurred while streaming: {str(e)}"
+            error_msg = "We're unable to process your request at the moment. Please try again."
             if stream_callback:
                 stream_callback(error_msg, 1.0)
             return error_msg 

@@ -44,6 +44,10 @@ class SpecialistAgent:
         Returns:
             str: Enhanced response
         """
+        # Check if base_response is an error message
+        if "unable to process" in base_response.lower():
+            return base_response
+            
         try:
             # Create enhancement prompt
             prompt = f"""
@@ -59,5 +63,6 @@ class SpecialistAgent:
                 generation_config=self.generation_config
             )
             return response.text
-        except Exception as e:
-            return base_response  # Fall back to base response if enhancement fails 
+        except Exception:
+            # If enhancement fails, return original response
+            return base_response 
