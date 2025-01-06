@@ -545,12 +545,15 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         parts = prepare_messages(prompt, files_data)
         specialist_responses = []
         
-        # Progress indicator with spinner
+        # Create containers for dynamic updates
         progress_text = st.empty()
+        specialist_containers = st.container()
+        
+        # Progress indicator with spinner
         progress_text.markdown("""
         <div class="processing-message">
             <div class="spinner"></div>
-            <span>Consulting domain specialists...</span>
+            <span>Analyzing input...</span>
         </div>
         """, unsafe_allow_html=True)
         
@@ -574,18 +577,40 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         
         # Process specialist responses
         if domains:
-            progress_text.markdown("🔄 _Consulting domain specialists..._")
+            # Create placeholders for each specialist
+            specialist_placeholders = {}
+            with specialist_containers:
+                for domain in domains:
+                    specialist_placeholders[domain] = st.empty()
+            
             for domain in domains:
+                # Update progress message for current specialist
+                progress_text.markdown(f"""
+                <div class="processing-message">
+                    <div class="spinner"></div>
+                    <span>Consulting {domain.title()} specialist...</span>
+                </div>
+                """, unsafe_allow_html=True)
+                
                 if domain not in orchestrator.agents:
                     orchestrator.agents[domain] = orchestrator.create_specialist(domain)
                 
                 specialist_response = ""
+                response_container = specialist_placeholders[domain]
+                
+                # Initialize the expander
+                with response_container:
+                    with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
+                        response_text = st.empty()
+                
                 for chunk in orchestrator.agents[domain].generate_response(
                     parts,
                     previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
                     stream=True
                 ):
                     specialist_response += chunk
+                    # Update the response text in real-time
+                    response_text.markdown(specialist_response)
                 
                 specialist_responses.append({
                     'domain': domain,
@@ -596,7 +621,13 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             st.session_state.specialist_responses = specialist_responses
         
         # Generate synthesis
-        progress_text.markdown("🔄 _Synthesizing insights..._")
+        progress_text.markdown("""
+        <div class="processing-message">
+            <div class="spinner"></div>
+            <span>Synthesizing insights...</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
         synthesis = ""
         for chunk in orchestrator.agents['reasoner'].generate_response(
             parts,
