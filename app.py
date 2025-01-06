@@ -4,7 +4,7 @@ import streamlit as st
 st.set_page_config(
     page_title="AI Assistant",
     page_icon="🤖",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
         'Get Help': None,
@@ -100,8 +100,8 @@ st.markdown("""
 
 /* Main container width */
 .main .block-container {
-    max-width: 1200px !important;
-    padding: 2rem 3rem !important;
+    max-width: 1400px !important;
+    padding: 2rem 4rem !important;
     margin: 0 auto !important;
 }
 
@@ -109,7 +109,7 @@ st.markdown("""
 [data-testid="stSidebar"] {
     background-color: var(--background-color);
     padding: 2rem 1rem;
-    min-width: 21rem !important;
+    min-width: 18rem !important;
     max-width: 35rem !important;
 }
 
@@ -122,17 +122,20 @@ st.markdown("""
     background-color: var(--input-background) !important;
     border: 1px solid var(--border-color) !important;
     border-radius: 8px !important;
-    padding: 1rem !important;
-    margin: 0.5rem 0 !important;
+    padding: 1.25rem !important;
+    margin: 0.75rem 0 !important;
 }
 
 /* Chat message container */
 .stChatMessage {
     background-color: var(--input-background);
     border-radius: 10px;
-    padding: 1rem;
-    margin: 0.5rem 0;
+    padding: 1.5rem;
+    margin: 1rem 0;
     border: 1px solid var(--border-color);
+    max-width: 1200px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
 }
 
 /* Expander styling */
@@ -140,13 +143,13 @@ st.markdown("""
     background-color: var(--input-background) !important;
     border: 1px solid var(--border-color) !important;
     border-radius: 8px !important;
-    padding: 1rem !important;
-    margin: 0.5rem 0 !important;
+    padding: 1.25rem !important;
+    margin: 0.75rem 0 !important;
 }
 
 .streamlit-expanderContent {
     border: none !important;
-    padding: 1rem !important;
+    padding: 1.25rem !important;
     background-color: transparent !important;
 }
 
@@ -154,11 +157,12 @@ st.markdown("""
 .stButton > button {
     width: 100%;
     border: 1px solid var(--border-color);
-    padding: 0.5rem 1rem;
+    padding: 0.75rem 1.25rem;
     background-color: transparent;
     color: var(--text-color);
     border-radius: 6px;
     transition: all 0.2s ease;
+    font-size: 0.95rem;
 }
 
 .stButton > button:hover {
@@ -197,34 +201,44 @@ header {visibility: hidden;}
 
 /* File uploader styling */
 [data-testid="stFileUploader"] {
-    padding: 1rem;
+    padding: 1.5rem;
     background-color: var(--input-background);
     border-radius: 8px;
     border: 1px dashed var(--border-color);
+    width: 100% !important;
 }
 
 /* Chat input styling */
 .stChatInput {
-    margin-bottom: 0 !important;
-    padding: 0.5rem !important;
+    max-width: 1200px !important;
+    margin: 0 auto !important;
+    padding: 1rem !important;
 }
 
 /* Download link styling */
 a.download-link {
     display: inline-block;
-    padding: 0.5rem 1rem;
+    padding: 0.75rem 1.25rem;
     background-color: var(--input-background);
     color: var(--text-color);
     text-decoration: none;
     border-radius: 6px;
     border: 1px solid var(--border-color);
     transition: all 0.2s ease;
-    margin: 0.25rem 0;
+    margin: 0.5rem 0;
+    font-size: 0.95rem;
 }
 
 a.download-link:hover {
     background-color: var(--hover-color);
     border-color: var(--accent-color);
+}
+
+/* Title styling */
+h1 {
+    max-width: 1200px !important;
+    margin: 2rem auto 3rem !important;
+    padding: 0 1rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
