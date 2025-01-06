@@ -376,6 +376,55 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
     border-radius: 4px;
     padding: 0.25rem;
 }
+
+/* Three-dot menu styling */
+.three-dot-menu {
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.three-dot-menu:hover {
+    opacity: 1;
+}
+
+/* Improve column spacing */
+[data-testid="column"] {
+    padding: 0 !important;
+}
+
+/* Style the three-dot expander */
+[data-testid="column"] .streamlit-expanderHeader {
+    background: transparent !important;
+    border: none !important;
+    padding: 0.25rem !important;
+    margin: 0 !important;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+[data-testid="column"] .streamlit-expanderHeader:hover {
+    color: rgba(255, 255, 255, 1);
+}
+
+/* Style copy button */
+[data-testid="column"] button {
+    width: 100%;
+    padding: 0.25rem 0.5rem;
+    margin: 0;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    transition: all 0.2s ease;
+}
+
+[data-testid="column"] button:hover {
+    color: rgba(255, 255, 255, 1);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Add spacing between synthesis and suggestions */
+[data-testid="stExpander"] + div {
+    margin-top: 1rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1014,29 +1063,56 @@ def chat_interface():
                     avatar = message.get("avatar", "🤖")
                     with st.chat_message("assistant", avatar=avatar):
                         if message["type"] == "initial_analysis":
-                            with st.expander("Initial Analysis", expanded=False):
-                                st.markdown(message["content"])
+                            col1, col2 = st.columns([20, 1])
+                            with col1:
+                                with st.expander("Initial Analysis", expanded=False):
+                                    st.markdown(message["content"])
+                            with col2:
+                                with st.expander("⋮", expanded=False):
+                                    if st.button("Copy", key=f"copy_initial_{hash(str(message))}"):
+                                        copy_to_clipboard(message["content"])
                         
                         elif message["type"] == "specialist":
-                            with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
-                                st.markdown(message["content"])
+                            col1, col2 = st.columns([20, 1])
+                            with col1:
+                                with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
+                                    st.markdown(message["content"])
+                            with col2:
+                                with st.expander("⋮", expanded=False):
+                                    if st.button("Copy", key=f"copy_specialist_{hash(str(message))}"):
+                                        copy_to_clipboard(message["content"])
                         
                         elif message["type"] == "synthesis":
-                            with st.expander("Final Synthesis", expanded=False):
-                                st.markdown(message["content"])
+                            col1, col2 = st.columns([20, 1])
+                            with col1:
+                                with st.expander("Final Synthesis", expanded=True):
+                                    st.markdown(message["content"])
+                            with col2:
+                                with st.expander("⋮", expanded=False):
+                                    if st.button("Copy", key=f"copy_synthesis_{hash(str(message))}"):
+                                        copy_to_clipboard(message["content"])
                         
                         elif message["type"] == "suggestions":
-                            with st.expander("Explore Further", expanded=False):
-                                # Display each suggestion as a vertical button
-                                for idx, (headline, full_question) in enumerate(message["suggestions"]):
-                                    if st.button(
-                                        headline,
-                                        key=f"suggestion_{idx}_{hash(str(message))}",
-                                        help=full_question,
-                                        use_container_width=True
-                                    ):
-                                        st.session_state.next_prompt = full_question
-                                        st.rerun()
+                            # Add some spacing after synthesis
+                            st.markdown("")
+                            col1, col2 = st.columns([20, 1])
+                            with col1:
+                                with st.expander("Explore Further", expanded=True):
+                                    # Display each suggestion as a vertical button
+                                    for idx, (headline, full_question) in enumerate(message["suggestions"]):
+                                        if st.button(
+                                            headline,
+                                            key=f"suggestion_{idx}_{hash(str(message))}",
+                                            help=full_question,
+                                            use_container_width=True
+                                        ):
+                                            st.session_state.next_prompt = full_question
+                                            st.rerun()
+                            with col2:
+                                with st.expander("⋮", expanded=False):
+                                    if st.button("Copy All", key=f"copy_suggestions_{hash(str(message))}"):
+                                        suggestions_text = "\n\n".join([f"{h}\n{q}" for h, q in message["suggestions"]])
+                                        copy_to_clipboard(suggestions_text)
         
         # Handle suggestion clicks
         if 'next_prompt' in st.session_state:
