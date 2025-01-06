@@ -141,7 +141,8 @@ def initialize_session_state():
         'temperature': 0.7,
         'top_p': 0.95,
         'top_k': 40,
-        'max_output_tokens': 2048
+        'max_output_tokens': 2048,
+        'active_agent': 'technical_expert'  # Default agent
     }
     
     for key, value in defaults.items():
@@ -399,6 +400,15 @@ def model_settings_sidebar():
     with st.sidebar:
         st.title("Model Settings")
         
+        # Agent selection
+        st.session_state.active_agent = st.selectbox(
+            "Active Agent",
+            ["technical_expert", "report_agent"],
+            help="Select which agent handles the conversation"
+        )
+        
+        st.divider()
+        
         # Temperature slider
         st.session_state.temperature = st.slider(
             "Temperature",
@@ -453,6 +463,58 @@ def model_settings_sidebar():
         for key, value in settings.items():
             st.text(f"{key}: {value}")
 
+def get_active_agent():
+    """Get the currently active agent based on selection."""
+    from agents.technical_expert import TechnicalExpert
+    from agents.report_agent import ReportAgent
+    
+    agent_map = {
+        'technical_expert': TechnicalExpert,
+        'report_agent': ReportAgent
+    }
+    
+    AgentClass = agent_map.get(st.session_state.active_agent)
+    if not AgentClass:
+        st.error(f"Unknown agent type: {st.session_state.active_agent}")
+        return None
+    
+    config = AgentConfig(
+        temperature=st.session_state.temperature,
+        top_p=st.session_state.top_p,
+        top_k=st.session_state.top_k,
+        max_output_tokens=st.session_state.max_output_tokens
+    )
+    
+    return AgentClass(config)
+
+def process_with_agent(agent, prompt: str, files_data: list = None):
+    """Process input through the selected agent."""
+    try:
+        # Prepare messages
+        parts = prepare_messages(prompt, files_data)
+        
+        # Get agent's response
+        with st.chat_message("assistant"):
+            response_placeholder = st.empty()
+            full_response = ""
+            
+            # Stream the response through the agent
+            for chunk in agent.generate_response(parts, stream=True):
+                if chunk:
+                    full_response += chunk
+                    response_placeholder.markdown(full_response + "▌")
+            
+            # Final update without cursor
+            response_placeholder.markdown(full_response)
+        
+        return full_response
+        
+    except Exception as e:
+        st.error(f"Agent error: {str(e)}")
+        if st.checkbox("Show detailed error"):
+            st.error("Full error details:", exc_info=True)
+        return None
+
 def chat_interface():
     """Modern chat interface with minimal design."""
     st.title("AI Assistant")
@@ -462,6 +524,11 @@ def chat_interface():
     
     # Show model settings sidebar
     model_settings_sidebar()
+    
+    # Get active agent
+    agent = get_active_agent()
+    if not agent:
+        return
     
     # Container for chat history
     with st.container():
@@ -531,51 +598,25 @@ def chat_interface():
             st.session_state.messages.append(user_message)
             
             try:
-                # Prepare messages with all files
-                parts = prepare_messages(prompt, files_data)
+                # Process through agent
+                response = process_with_agent(agent, prompt, files_data)
                 
-                # Generate response using current settings
-                model = genai.GenerativeModel('gemini-2.0-flash-exp')
-                
-                # Create a placeholder for the streaming response
-                with st.chat_message("assistant"):
-                    response_placeholder = st.empty()
-                    full_response = ""
+                if response:
+                    # Add to history
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": response
+                    })
                     
-                    # Stream the response
-                    for chunk in model.generate_content(
-                        parts,
-                        generation_config={
-                            'temperature': st.session_state.temperature,
-                            'top_p': st.session_state.top_p,
-                            'top_k': st.session_state.top_k,
-                            'max_output_tokens': st.session_state.max_output_tokens,
-                        },
-                        stream=True
-                    ):
-                        if chunk.text:
-                            full_response += chunk.text
-                            # Update the placeholder with the accumulated response
-                            response_placeholder.markdown(full_response + "▌")
+                    # Generate new suggestions
+                    st.session_state.suggestions = generate_suggestions(response)
                     
-                    # Final update without the cursor
-                    response_placeholder.markdown(full_response)
-                
-                # Add to history
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": full_response
-                })
-                
-                # Generate new suggestions
-                st.session_state.suggestions = generate_suggestions(full_response)
-                
-                # Update file uploader key to clear files
-                st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
-                
-                # Clear input
-                st.rerun()
-                
+                    # Update file uploader key to clear files
+                    st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
+                    
+                    # Clear input
+                    st.rerun()
+                    
             except Exception as e:
                 st.error(f"Error: {str(e)}")
                 if st.checkbox("Show detailed error"):
