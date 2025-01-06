@@ -606,21 +606,17 @@ def prepare_messages(text_input: str, files_data: list = None) -> list:
                 })
             elif file_data['type'] == 'text':
                 parts.append({
-                    'text': f"Content from {file_data['name']}:\n{file_data['data']}"
+                    'text': f"Content from {file_data['name']}:\n{file_data['data']}\n\n"
                 })
     
     # Add user's text input
     if text_input:
-        if not parts:
-            # If no files, make text input the primary message
-            parts = [{'text': text_input}]
-        else:
-            # If there are files, append text input
-            parts.append({'text': text_input})
-    elif not parts:
-        # Ensure there's at least one message
-        parts = [{'text': ''}]
-        
+        parts.append({'text': text_input})
+    
+    # Ensure there's at least one part with text
+    if not parts or not any('text' in part for part in parts):
+        parts.append({'text': text_input if text_input else ''})
+    
     return parts
 
 def how_it_works_sidebar():
@@ -769,11 +765,14 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         if initial_response:
             st.session_state.specialist_responses['initial_analysis'] = initial_response
         
+        # Extract text content for specialist identification
+        text_content = ""
+        for part in parts:
+            if 'text' in part:
+                text_content += part['text'] + "\n"
+        
         # Identify required specialists
-        domains = []
-        if isinstance(parts, list) and parts and 'text' in parts[0]:
-            text_content = parts[0]['text']
-            domains = orchestrator.identify_required_specialists(text_content)
+        domains = orchestrator.identify_required_specialists(text_content.strip())
         st.session_state.current_domains = domains
         
         # Process specialist responses
@@ -851,6 +850,11 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         if synthesis:
             st.session_state.specialist_responses['final_synthesis'] = synthesis
             
+            # Generate suggestions based on synthesis
+            suggestions = generate_suggestions(synthesis)
+            if suggestions:
+                st.session_state.suggestions = suggestions
+            
             # Create a new message entry for this response
             new_message = {
                 "role": "assistant",
@@ -920,9 +924,6 @@ def chat_interface():
                 response = process_with_orchestrator(orchestrator, prompt, files_data if files_data else None)
                 if response:
                     st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
-                    suggestions = generate_suggestions(response)
-                    if suggestions:
-                        st.session_state.suggestions = suggestions
             except Exception as e:
                 st.error(f"Error: {str(e)}")
                 if st.checkbox("Show detailed error"):
@@ -965,8 +966,8 @@ def chat_interface():
                             with st.expander("📊 Final Synthesis", expanded=True):
                                 st.markdown(synthesis)
                                 
-                                # Display suggestions
-                                if st.session_state.suggestions:
+                                # Display suggestions if this is the most recent message
+                                if message == st.session_state.messages[-1] and st.session_state.suggestions:
                                     st.markdown("---")
                                     st.markdown("### 🤔 Explore Further")
                                     cols = st.columns(3)
@@ -980,7 +981,7 @@ def chat_interface():
                                         with col:
                                             if st.button(
                                                 f"{style} {headline}",
-                                                key=f"suggestion_{idx}",
+                                                key=f"suggestion_{idx}_{hash(str(message))}",
                                                 help=full_question
                                             ):
                                                 st.session_state.next_prompt = full_question
