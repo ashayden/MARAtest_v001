@@ -115,47 +115,25 @@ st.markdown("""
     margin: 0.5rem 0;
 }
 
-/* Processing status */
-.processing-message {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem;
-    margin: 0.5rem 0;
-    background-color: #2d2d2d;
-    border: 1px solid #404040;
-    border-radius: 8px;
-}
-
-.spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid #4CAF50;
-    border-top: 2px solid transparent;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
 /* Chat input container */
-.stChatInput {
+[data-testid="stChatInput"] {
     position: fixed;
     bottom: 0;
     left: 50%;
     transform: translateX(-50%);
-    width: 800px;
-    max-width: calc(100vw - 450px);
-    padding: 1rem 2rem;
+    width: 67%;
+    max-width: 800px;
     background-color: #1a1a1a;
-    border-top: 1px solid #404040;
+    padding: 1rem;
     z-index: 999;
+    border-top: 1px solid #404040;
 }
 
-.stChatInput textarea {
+[data-testid="stChatInput"] > div {
+    margin: 0 auto;
+}
+
+[data-testid="stChatInput"] textarea {
     background-color: #2d2d2d !important;
     border: 1px solid #404040 !important;
     border-radius: 6px !important;
@@ -164,9 +142,23 @@ st.markdown("""
     max-height: 200px !important;
 }
 
-.stChatInput textarea:focus {
+[data-testid="stChatInput"] textarea:focus {
     border-color: #4CAF50 !important;
     box-shadow: 0 0 0 1px #4CAF50 !important;
+}
+
+/* Status indicator */
+[data-testid="stStatus"] {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 67%;
+    max-width: 800px;
+    background-color: #2d2d2d;
+    border: 1px solid #404040;
+    border-radius: 8px;
+    z-index: 998;
 }
 
 /* Buttons */
@@ -202,20 +194,6 @@ header {visibility: hidden;}
     display: block !important;
     border: none !important;
     padding: 0 !important;
-}
-
-/* Status indicator */
-[data-testid="stStatus"] {
-    position: fixed;
-    bottom: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 800px;
-    max-width: calc(100vw - 450px);
-    background-color: #2d2d2d;
-    border: 1px solid #404040;
-    border-radius: 8px;
-    z-index: 998;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -610,11 +588,11 @@ def get_domain_avatar(domain: str) -> str:
 
 def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None):
     """Process input through the collaborative agent system."""
+    # Create containers outside the try block
+    status_container = st.status("Processing...", expanded=True)
+    error_container = st.empty()
+    
     try:
-        # Create status container that stays visible
-        status_container = st.status("Processing...", expanded=True)
-        error_container = st.empty()
-        
         def update_progress(message):
             status_container.update(label=message, expanded=True)
         
