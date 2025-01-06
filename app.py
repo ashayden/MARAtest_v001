@@ -79,9 +79,9 @@ st.markdown("""
 footer {visibility: hidden;}
 header {visibility: hidden;}
 
-/* Chat container */
+/* Main container padding */
 .main > div:first-child {
-    padding-bottom: 80px;  /* Make room for input container */
+    padding-bottom: 100px;  /* Space for input */
 }
 
 /* Input container */
@@ -91,56 +91,58 @@ header {visibility: hidden;}
     left: 0;
     right: 0;
     background: var(--background-color);
-    padding: 1rem;
     border-top: 1px solid var(--border-color);
+    padding: 1rem;
     z-index: 1000;
+}
+
+/* Chat input wrapper */
+.stChatInput {
+    padding: 0 !important;
+    background: transparent !important;
+}
+
+/* Chat input field */
+.stChatInput input {
+    border-radius: 20px !important;
+    border: 1px solid var(--border-color) !important;
+    background: var(--input-background) !important;
+    color: var(--text-color) !important;
+    padding: 12px 50px 12px 45px !important;  /* Space for icons */
+    height: 45px !important;
+    margin: 0 !important;
+}
+
+/* File upload button */
+.file-upload-btn {
+    position: absolute;
+    left: 15px;
+    bottom: 22px;
+    z-index: 1001;
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    opacity: 0.7;
+    cursor: pointer;
+    padding: 5px;
+    font-size: 20px;
+}
+
+.file-upload-btn:hover {
+    opacity: 1;
+}
+
+/* Hide default file uploader UI */
+.stFileUploader > div:first-child {
+    display: none;
 }
 
 /* Chat messages */
 .stChatMessage {
-    background-color: var(--input-background);
-    border-radius: 10px;
+    background: var(--input-background);
+    border-radius: 15px;
     padding: 1rem;
     margin-bottom: 1rem;
-}
-
-/* Chat input */
-.stChatInput {
-    border-radius: 20px !important;
-    border: 1px solid var(--border-color) !important;
-    background-color: var(--input-background) !important;
-    color: var(--text-color) !important;
-    padding-right: 50px !important;
-}
-
-/* File uploader */
-.stFileUploader {
-    position: absolute;
-    right: 60px;
-    bottom: 10px;
-    width: 40px;
-    overflow: hidden;
-}
-
-.stFileUploader > div > div {
-    opacity: 0;
-    position: absolute;
-}
-
-.stFileUploader::before {
-    content: "📎";
-    position: absolute;
-    right: 10px;
-    bottom: 10px;
-    font-size: 20px;
-    cursor: pointer;
-    color: var(--text-color);
-    opacity: 0.7;
-    transition: opacity 0.2s;
-}
-
-.stFileUploader:hover::before {
-    opacity: 1;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -351,10 +353,15 @@ def chat_interface():
     with st.container():
         st.markdown('<div class="input-container">', unsafe_allow_html=True)
         
-        # Two columns: file upload and chat input
-        cols = st.columns([0.1, 0.9])
+        # Create a single row for input
+        cols = st.columns([0.08, 0.92])
         
+        # File upload button
         with cols[0]:
+            st.markdown(
+                '<button class="file-upload-btn">📎</button>',
+                unsafe_allow_html=True
+            )
             uploaded_file = st.file_uploader(
                 "",
                 type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
@@ -362,6 +369,7 @@ def chat_interface():
                 key="chat_file_uploader"
             )
         
+        # Chat input
         with cols[1]:
             prompt = st.chat_input("Message")
         
