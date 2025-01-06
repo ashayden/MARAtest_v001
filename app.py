@@ -831,6 +831,12 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         
         if synthesis:
             st.session_state.specialist_responses['final_synthesis'] = synthesis
+            
+            # Add assistant's response to message history
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": synthesis
+            })
         
         # Clear progress indicator
         progress.empty()
@@ -895,60 +901,62 @@ def chat_interface():
                     st.error("Full error details:", exc_info=True)
         
         # Display chat history
-        for message in st.session_state.messages:
-            if message["role"] == "user":
-                with st.chat_message("user"):
-                    st.write(message["content"])
-                    if message.get("files_data"):
-                        for file_data in message["files_data"]:
-                            if file_data["type"] == "image":
-                                st.image(file_data["display_data"])
-                            elif file_data["type"] == "text":
-                                with st.expander(f"📄 {file_data['name']}", expanded=False):
-                                    st.text(file_data["data"])
-            
-            elif message["role"] == "assistant":
-                with st.chat_message("assistant"):
-                    # Display responses in order: Initial → Specialists → Synthesis
-                    if 'initial_analysis' in st.session_state.specialist_responses:
-                        with st.expander("🎯 Initial Analysis", expanded=False):
-                            st.markdown(st.session_state.specialist_responses['initial_analysis'])
-                    
-                    # Display specialist responses in order they were called
-                    displayed_domains = set()
-                    if 'current_domains' in st.session_state:
-                        for domain in st.session_state.current_domains:
-                            if domain not in displayed_domains and domain in st.session_state.specialist_responses:
-                                with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
-                                    st.markdown(st.session_state.specialist_responses[domain])
-                                displayed_domains.add(domain)
-                    
-                    # Display final synthesis
-                    if 'final_synthesis' in st.session_state.specialist_responses:
-                        with st.expander("📊 Final Synthesis", expanded=True):
-                            st.markdown(st.session_state.specialist_responses['final_synthesis'])
-                            
-                            # Display suggestions only after synthesis
-                            if st.session_state.suggestions:
-                                st.markdown("---")
-                                st.markdown("### 🤔 Explore Further")
-                                cols = st.columns(3)
-                                button_styles = ["💡", "🔄", "🌟"]
+        messages_container = st.container()
+        with messages_container:
+            for message in st.session_state.messages:
+                if message["role"] == "user":
+                    with st.chat_message("user"):
+                        st.write(message["content"])
+                        if message.get("files_data"):
+                            for file_data in message["files_data"]:
+                                if file_data["type"] == "image":
+                                    st.image(file_data["display_data"])
+                                elif file_data["type"] == "text":
+                                    with st.expander(f"📄 {file_data['name']}", expanded=False):
+                                        st.text(file_data["data"])
+                
+                elif message["role"] == "assistant":
+                    with st.chat_message("assistant"):
+                        # Display responses in order: Initial → Specialists → Synthesis
+                        if 'initial_analysis' in st.session_state.specialist_responses:
+                            with st.expander("🎯 Initial Analysis", expanded=False):
+                                st.markdown(st.session_state.specialist_responses['initial_analysis'])
+                        
+                        # Display specialist responses in order they were called
+                        displayed_domains = set()
+                        if 'current_domains' in st.session_state:
+                            for domain in st.session_state.current_domains:
+                                if domain not in displayed_domains and domain in st.session_state.specialist_responses:
+                                    with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
+                                        st.markdown(st.session_state.specialist_responses[domain])
+                                    displayed_domains.add(domain)
+                        
+                        # Display final synthesis
+                        if 'final_synthesis' in st.session_state.specialist_responses:
+                            with st.expander("📊 Final Synthesis", expanded=True):
+                                st.markdown(st.session_state.specialist_responses['final_synthesis'])
                                 
-                                for idx, ((headline, full_question), style, col) in enumerate(zip(
-                                    st.session_state.suggestions,
-                                    button_styles,
-                                    cols
-                                )):
-                                    with col:
-                                        if st.button(
-                                            f"{style} {headline}",
-                                            key=f"suggestion_{idx}",
-                                            help=full_question
-                                        ):
-                                            st.session_state.next_prompt = full_question
-                                            st.rerun()
-                                        st.caption(full_question[:100] + "..." if len(full_question) > 100 else full_question)
+                                # Display suggestions only after synthesis
+                                if st.session_state.suggestions:
+                                    st.markdown("---")
+                                    st.markdown("### 🤔 Explore Further")
+                                    cols = st.columns(3)
+                                    button_styles = ["💡", "🔄", "🌟"]
+                                    
+                                    for idx, ((headline, full_question), style, col) in enumerate(zip(
+                                        st.session_state.suggestions,
+                                        button_styles,
+                                        cols
+                                    )):
+                                        with col:
+                                            if st.button(
+                                                f"{style} {headline}",
+                                                key=f"suggestion_{idx}",
+                                                help=full_question
+                                            ):
+                                                st.session_state.next_prompt = full_question
+                                                st.rerun()
+                                            st.caption(full_question[:100] + "..." if len(full_question) > 100 else full_question)
         
         # Handle suggestion clicks
         if 'next_prompt' in st.session_state:
