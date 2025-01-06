@@ -759,11 +759,12 @@ def chat_interface():
             
             # Process through orchestrator
             try:
-                with st.status("Processing...", expanded=True) as status:
+                with st.empty() as status:
+                    status.write("Processing...")
                     response = process_with_orchestrator(orchestrator, prompt)
                     if response:
                         st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
-                    status.update(label="Complete!", state="complete", expanded=False)
+                    status.write("Complete!")
             except Exception as e:
                 st.error(f"Error: {str(e)}")
                 with st.expander("Show error details"):
