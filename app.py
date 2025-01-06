@@ -850,15 +850,11 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         if synthesis:
             st.session_state.specialist_responses['final_synthesis'] = synthesis
             
-            # Generate suggestions based on synthesis
-            suggestions = generate_suggestions(synthesis)
-            if suggestions:
-                st.session_state.suggestions = suggestions
-            
-            # Create a new message entry for this response
-            new_message = {
+            # Create analysis message
+            analysis_message = {
                 "role": "assistant",
                 "content": synthesis,
+                "type": "analysis",
                 "responses": {
                     "initial_analysis": initial_response,
                     "specialists": {domain: st.session_state.specialist_responses[domain] 
@@ -867,8 +863,19 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 }
             }
             
-            # Add to message history
-            st.session_state.messages.append(new_message)
+            # Generate suggestions and create separate message
+            suggestions = generate_suggestions(synthesis)
+            if suggestions:
+                suggestions_message = {
+                    "role": "assistant",
+                    "type": "suggestions",
+                    "suggestions": suggestions
+                }
+                # Add both messages to history
+                st.session_state.messages.extend([analysis_message, suggestions_message])
+            else:
+                # Add only analysis message if no suggestions
+                st.session_state.messages.append(analysis_message)
         
         # Clear progress indicator
         progress.empty()
@@ -946,47 +953,45 @@ def chat_interface():
                 
                 elif message["role"] == "assistant":
                     with st.chat_message("assistant"):
-                        responses = message.get("responses", {})
+                        if message.get("type") == "analysis":
+                            responses = message.get("responses", {})
+                            
+                            # Display initial analysis
+                            initial = responses.get("initial_analysis")
+                            if initial:
+                                with st.expander("🎯 Initial Analysis", expanded=False):
+                                    st.markdown(initial)
+                            
+                            # Display specialist responses
+                            specialists = responses.get("specialists", {})
+                            for domain, response in specialists.items():
+                                with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
+                                    st.markdown(response)
+                            
+                            # Display final synthesis
+                            synthesis = responses.get("final_synthesis")
+                            if synthesis:
+                                with st.expander("📊 Final Synthesis", expanded=True):
+                                    st.markdown(synthesis)
                         
-                        # Display initial analysis
-                        initial = responses.get("initial_analysis")
-                        if initial:
-                            with st.expander("🎯 Initial Analysis", expanded=False):
-                                st.markdown(initial)
-                        
-                        # Display specialist responses
-                        specialists = responses.get("specialists", {})
-                        for domain, response in specialists.items():
-                            with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
-                                st.markdown(response)
-                        
-                        # Display final synthesis
-                        synthesis = responses.get("final_synthesis")
-                        if synthesis:
-                            with st.expander("📊 Final Synthesis", expanded=True):
-                                st.markdown(synthesis)
-                                
-                                # Display suggestions if this is the most recent message
-                                if message == st.session_state.messages[-1] and st.session_state.suggestions:
-                                    st.markdown("---")
-                                    st.markdown("### 🤔 Explore Further")
-                                    cols = st.columns(3)
-                                    button_styles = ["💡", "🔄", "🌟"]
-                                    
-                                    for idx, ((headline, full_question), style, col) in enumerate(zip(
-                                        st.session_state.suggestions,
-                                        button_styles,
-                                        cols
-                                    )):
-                                        with col:
-                                            if st.button(
-                                                f"{style} {headline}",
-                                                key=f"suggestion_{idx}_{hash(str(message))}",
-                                                help=full_question
-                                            ):
-                                                st.session_state.next_prompt = full_question
-                                                st.rerun()
-                                            st.caption(full_question[:100] + "..." if len(full_question) > 100 else full_question)
+                        elif message.get("type") == "suggestions":
+                            st.markdown("### 🤔 Explore Further")
+                            cols = st.columns(3)
+                            button_styles = ["💡", "🔄", "🌟"]
+                            
+                            for idx, ((headline, full_question), style, col) in enumerate(zip(
+                                message["suggestions"],
+                                button_styles,
+                                cols
+                            )):
+                                with col:
+                                    if st.button(
+                                        f"{style} {headline}",
+                                        key=f"suggestion_{idx}_{hash(str(message))}",
+                                        help=full_question
+                                    ):
+                                        st.session_state.next_prompt = full_question
+                                        st.rerun()
         
         # Handle suggestion clicks
         if 'next_prompt' in st.session_state:
