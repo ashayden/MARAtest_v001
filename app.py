@@ -184,17 +184,6 @@ header {visibility: hidden;}
 .main .block-container {
     padding-bottom: 100px !important;
 }
-
-/* Remove all expander styling */
-[data-testid="stExpander"] {
-    display: none !important;
-}
-
-[data-testid="stExpanderContent"] {
-    display: block !important;
-    border: none !important;
-    padding: 0 !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
