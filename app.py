@@ -81,7 +81,7 @@ header {visibility: hidden;}
 
 /* Main container */
 .main {
-    padding-bottom: 80px;  /* Space for input */
+    padding-bottom: 80px;
 }
 
 /* Chat messages */
@@ -103,23 +103,51 @@ header {visibility: hidden;}
     padding: 1rem;
 }
 
-/* Hide default Streamlit file uploader */
-[data-testid="stFileUploader"] {
-    display: none;
+/* Chat input container */
+.stChatInput {
+    position: relative;
 }
 
-/* File upload button */
+/* Chat input field */
+.stChatInput > div {
+    background: var(--input-background) !important;
+    border-radius: 20px !important;
+    border: 2px dashed var(--border-color) !important;
+    transition: all 0.2s ease;
+}
+
+.stChatInput input {
+    color: var(--text-color) !important;
+    padding: 12px 50px 12px 45px !important;
+    height: 45px !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+/* File upload area */
+.file-upload-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+    opacity: 0;
+    cursor: pointer;
+}
+
+/* File button */
 .file-button {
     position: absolute;
-    left: 20px;
-    bottom: 20px;
+    left: 15px;
+    bottom: 12px;
     background: none;
     border: none;
     color: var(--text-color);
     opacity: 0.7;
     cursor: pointer;
     font-size: 20px;
-    z-index: 100;
+    z-index: 99;
     padding: 5px;
 }
 
@@ -127,15 +155,47 @@ header {visibility: hidden;}
     opacity: 1;
 }
 
-/* Chat input styling */
-.stChatInput {
-    margin-bottom: 0 !important;
+/* Drag state styles */
+.drag-active .stChatInput > div {
+    border-style: dashed !important;
+    border-color: #2196F3 !important;
+    background: rgba(33, 150, 243, 0.1) !important;
 }
 
-.stChatInput > div {
-    padding-left: 40px !important;
+/* Hide default uploader UI */
+[data-testid="stFileUploader"] {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
 }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const inputArea = document.querySelector('.stChatInput');
+    
+    inputArea.addEventListener('dragenter', function(e) {
+        e.preventDefault();
+        inputArea.classList.add('drag-active');
+    });
+    
+    inputArea.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        inputArea.classList.remove('drag-active');
+    });
+    
+    inputArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+    });
+    
+    inputArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        inputArea.classList.remove('drag-active');
+    });
+});
+</script>
 """, unsafe_allow_html=True)
 
 def initialize_session_state():
@@ -330,7 +390,7 @@ def prepare_messages(text_input: str, file_data: dict = None) -> list:
     return parts
 
 def chat_interface():
-    """Modern chat interface with minimal design."""
+    """Modern chat interface with drag-and-drop support."""
     st.title("AI Assistant")
     
     # Initialize chat history
@@ -351,19 +411,23 @@ def chat_interface():
     # Input area
     st.markdown('<div class="input-area">', unsafe_allow_html=True)
     
-    # File upload (hidden but functional)
-    uploaded_file = st.file_uploader(
-        "",
-        type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-        label_visibility="collapsed",
-        key="file_uploader"
-    )
+    # File upload and chat input container
+    cols = st.columns([0.08, 0.92])
     
-    # File button
-    st.markdown('<button class="file-button" title="Upload file">📎</button>', unsafe_allow_html=True)
+    with cols[0]:
+        st.markdown('<button class="file-button" title="Upload file">📎</button>', unsafe_allow_html=True)
     
-    # Chat input
-    prompt = st.chat_input("Message")
+    with cols[1]:
+        # Hidden file uploader that works with drag and drop
+        uploaded_file = st.file_uploader(
+            "",
+            type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+            label_visibility="collapsed",
+            key="file_uploader"
+        )
+        
+        # Chat input
+        prompt = st.chat_input("Type your message or drag & drop a file")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
