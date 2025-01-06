@@ -79,66 +79,9 @@ st.markdown("""
 footer {visibility: hidden;}
 header {visibility: hidden;}
 
-/* Main container padding */
-.main > div:first-child {
-    padding-bottom: 100px;  /* Space for input */
-}
-
-/* Input container */
-.input-container {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: var(--background-color);
-    border-top: 1px solid var(--border-color);
-    padding: 1rem;
-    z-index: 1000;
-}
-
-/* Chat input field */
-.stChatInput > div {
-    background: var(--input-background) !important;
-    border-radius: 20px !important;
-    border: 1px solid var(--border-color) !important;
-    padding: 0 !important;
-}
-
-.stChatInput input {
-    color: var(--text-color) !important;
-    padding: 12px 50px 12px 45px !important;
-    height: 45px !important;
-    background: transparent !important;
-    border: none !important;
-}
-
-/* File upload container */
-.file-upload-container {
-    position: absolute;
-    left: 15px;
-    bottom: 22px;
-    z-index: 1001;
-}
-
-/* Hide default file uploader */
-.file-upload-container > div > div:first-child {
-    display: none;
-}
-
-/* Custom file upload button */
-.file-upload-btn {
-    color: var(--text-color);
-    opacity: 0.7;
-    cursor: pointer;
-    background: none;
-    border: none;
-    font-size: 20px;
-    padding: 5px;
-    transition: opacity 0.2s;
-}
-
-.file-upload-btn:hover {
-    opacity: 1;
+/* Main container */
+.main {
+    padding-bottom: 80px;  /* Space for input */
 }
 
 /* Chat messages */
@@ -147,6 +90,50 @@ header {visibility: hidden;}
     border-radius: 15px;
     padding: 1rem;
     margin-bottom: 1rem;
+}
+
+/* Input area */
+.input-area {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--background-color);
+    border-top: 1px solid var(--border-color);
+    padding: 1rem;
+}
+
+/* Hide default Streamlit file uploader */
+[data-testid="stFileUploader"] {
+    display: none;
+}
+
+/* File upload button */
+.file-button {
+    position: absolute;
+    left: 20px;
+    bottom: 20px;
+    background: none;
+    border: none;
+    color: var(--text-color);
+    opacity: 0.7;
+    cursor: pointer;
+    font-size: 20px;
+    z-index: 100;
+    padding: 5px;
+}
+
+.file-button:hover {
+    opacity: 1;
+}
+
+/* Chat input styling */
+.stChatInput {
+    margin-bottom: 0 !important;
+}
+
+.stChatInput > div {
+    padding-left: 40px !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -343,64 +330,53 @@ def prepare_messages(text_input: str, file_data: dict = None) -> list:
     return parts
 
 def chat_interface():
-    """Modern chat interface with bottom input."""
+    """Modern chat interface with minimal design."""
     st.title("AI Assistant")
     
     # Initialize chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
-    # Chat container
-    chat_container = st.container()
+    # Chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+            if "file_data" in message:
+                if message["file_data"]["type"] == "image":
+                    st.image(message["file_data"]["display_data"])
+                elif message["file_data"]["type"] == "text":
+                    with st.expander("📄 View File Content"):
+                        st.text(message["file_data"]["data"])
     
-    # Display chat history in the main container
-    with chat_container:
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
-                if "file_data" in message:
-                    if message["file_data"]["type"] == "image":
-                        st.image(message["file_data"]["display_data"])
-                    elif message["file_data"]["type"] == "text":
-                        with st.expander("📄 View File Content"):
-                            st.text(message["file_data"]["data"])
+    # Input area
+    st.markdown('<div class="input-area">', unsafe_allow_html=True)
     
-    # Fixed input container at bottom
-    with st.container():
-        st.markdown('<div class="input-container">', unsafe_allow_html=True)
-        
-        # File upload and input in a single row
-        cols = st.columns([0.08, 0.92])
-        
-        with cols[0]:
-            st.markdown('<div class="file-upload-container">', unsafe_allow_html=True)
-            uploaded_file = st.file_uploader(
-                "",
-                type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-                label_visibility="collapsed",
-                key="chat_file_uploader"
-            )
-            st.markdown(
-                '<button class="file-upload-btn" title="Upload file">📎</button>',
-                unsafe_allow_html=True
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with cols[1]:
-            prompt = st.chat_input("Type your message here...")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+    # File upload (hidden but functional)
+    uploaded_file = st.file_uploader(
+        "",
+        type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+        label_visibility="collapsed",
+        key="file_uploader"
+    )
+    
+    # File button
+    st.markdown('<button class="file-button" title="Upload file">📎</button>', unsafe_allow_html=True)
+    
+    # Chat input
+    prompt = st.chat_input("Message")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
     
     # Handle input
     if prompt:
-        # Process any uploaded file
+        # Process uploaded file
         file_data = None
         if uploaded_file:
             file_data = process_file_upload(uploaded_file)
             if file_data:
                 st.toast(f"📎 {file_data['name']} attached")
         
-        # Add user message to chat
+        # Display user message
         st.chat_message("user").write(prompt)
         if file_data:
             if file_data["type"] == "image":
@@ -408,20 +384,22 @@ def chat_interface():
             else:
                 st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
         
-        # Add to message history
+        # Add to history
         user_message = {
+            "role": "user",
+            "content": prompt,
+            "file_data": file_data
+        } if file_data else {
             "role": "user",
             "content": prompt
         }
-        if file_data:
-            user_message["file_data"] = file_data
         st.session_state.messages.append(user_message)
         
         try:
-            # Prepare messages for the model
+            # Prepare messages
             parts = prepare_messages(prompt, file_data)
             
-            # Generate response using Gemini
+            # Generate response
             model = genai.GenerativeModel('gemini-2.0-flash-exp')
             response = model.generate_content(
                 parts,
@@ -433,17 +411,17 @@ def chat_interface():
                 }
             )
             
-            # Display assistant response
+            # Display response
             with st.chat_message("assistant"):
                 st.write(response.text)
             
-            # Add to message history
+            # Add to history
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": response.text
             })
             
-            # Rerun to clear the input
+            # Clear input
             st.rerun()
             
         except Exception as e:
