@@ -674,7 +674,8 @@ def chat_interface():
             for message in st.session_state.messages:
                 with st.chat_message(message["role"]):
                     st.write(message["content"])
-                    if "files_data" in message:
+                    # Safely handle files_data
+                    if message.get("files_data"):  # Using get() to safely handle None
                         for file_data in message["files_data"]:
                             if file_data["type"] == "image":
                                 st.image(file_data["display_data"])
@@ -724,28 +725,11 @@ def chat_interface():
                         else:
                             st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
                 
-                # Add to history
-                user_message = {
-                    "role": "user",
-                    "content": prompt,
-                    "files_data": files_data
-                } if files_data else {
-                    "role": "user",
-                    "content": prompt
-                }
-                st.session_state.messages.append(user_message)
-                
                 try:
                     # Process through orchestrator
-                    response = process_with_orchestrator(orchestrator, prompt, files_data)
+                    response = process_with_orchestrator(orchestrator, prompt, files_data if files_data else None)
                     
                     if response:
-                        # Add to history
-                        st.session_state.messages.append({
-                            "role": "assistant",
-                            "content": response
-                        })
-                        
                         # Generate new suggestions
                         st.session_state.suggestions = generate_suggestions(response)
                         
