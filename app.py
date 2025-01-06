@@ -119,10 +119,10 @@ st.markdown("""
 [data-testid="stChatInput"] {
     position: fixed;
     bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 80%;
-    max-width: 600px;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: none;
     background-color: #1a1a1a;
     padding: 1rem;
     z-index: 999;
