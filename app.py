@@ -122,11 +122,12 @@ st.markdown("""
     left: 0;
     right: 0;
     width: 100%;
-    max-width: none;
+    max-width: 100%;
     background-color: #1a1a1a;
     padding: 1rem;
-    z-index: 1000;
+    z-index: 10000;
     border-top: 1px solid #404040;
+    box-sizing: border-box;
 }
 
 [data-testid="stChatInput"] > div {
