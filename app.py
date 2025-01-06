@@ -772,7 +772,8 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         # Identify required specialists
         domains = []
         if isinstance(parts, list) and parts and 'text' in parts[0]:
-            domains = orchestrator.identify_required_specialists(parts[0]['text'])
+            text_content = parts[0]['text']
+            domains = orchestrator.identify_required_specialists(text_content)
         st.session_state.current_domains = domains
         
         # Process specialist responses
@@ -792,14 +793,14 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     # Get previous responses for context
                     previous_responses = []
                     if initial_response:
-                        previous_responses.append(initial_response)
+                        previous_responses.append({'text': initial_response})
                     
                     # Add previous specialist responses
                     for prev_domain in st.session_state.current_domains:
                         if prev_domain != domain and prev_domain in st.session_state.specialist_responses:
                             prev_response = st.session_state.specialist_responses.get(prev_domain)
                             if prev_response:
-                                previous_responses.append(prev_response)
+                                previous_responses.append({'text': prev_response})
                     
                     # Generate specialist response
                     specialist_response = ""
@@ -829,11 +830,13 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         # Collect all responses for synthesis
         synthesis_inputs = []
         if initial_response:
-            synthesis_inputs.append(initial_response)
+            synthesis_inputs.append({'text': initial_response})
         
         for domain in st.session_state.current_domains:
             if domain in st.session_state.specialist_responses:
-                synthesis_inputs.append(st.session_state.specialist_responses[domain])
+                response = st.session_state.specialist_responses[domain]
+                if response:
+                    synthesis_inputs.append({'text': response})
         
         # Generate synthesis
         synthesis = ""
@@ -848,11 +851,20 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         if synthesis:
             st.session_state.specialist_responses['final_synthesis'] = synthesis
             
-            # Add assistant's response to message history
-            st.session_state.messages.append({
+            # Create a new message entry for this response
+            new_message = {
                 "role": "assistant",
-                "content": synthesis
-            })
+                "content": synthesis,
+                "responses": {
+                    "initial_analysis": initial_response,
+                    "specialists": {domain: st.session_state.specialist_responses[domain] 
+                                  for domain in st.session_state.current_domains},
+                    "final_synthesis": synthesis
+                }
+            }
+            
+            # Add to message history
+            st.session_state.messages.append(new_message)
         
         # Clear progress indicator
         progress.empty()
@@ -933,26 +945,27 @@ def chat_interface():
                 
                 elif message["role"] == "assistant":
                     with st.chat_message("assistant"):
-                        # Display responses in order: Initial → Specialists → Synthesis
-                        if 'initial_analysis' in st.session_state.specialist_responses:
-                            with st.expander("🎯 Initial Analysis", expanded=False):
-                                st.markdown(st.session_state.specialist_responses['initial_analysis'])
+                        responses = message.get("responses", {})
                         
-                        # Display specialist responses in order they were called
-                        displayed_domains = set()
-                        if 'current_domains' in st.session_state:
-                            for domain in st.session_state.current_domains:
-                                if domain not in displayed_domains and domain in st.session_state.specialist_responses:
-                                    with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
-                                        st.markdown(st.session_state.specialist_responses[domain])
-                                    displayed_domains.add(domain)
+                        # Display initial analysis
+                        initial = responses.get("initial_analysis")
+                        if initial:
+                            with st.expander("🎯 Initial Analysis", expanded=False):
+                                st.markdown(initial)
+                        
+                        # Display specialist responses
+                        specialists = responses.get("specialists", {})
+                        for domain, response in specialists.items():
+                            with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
+                                st.markdown(response)
                         
                         # Display final synthesis
-                        if 'final_synthesis' in st.session_state.specialist_responses:
+                        synthesis = responses.get("final_synthesis")
+                        if synthesis:
                             with st.expander("📊 Final Synthesis", expanded=True):
-                                st.markdown(st.session_state.specialist_responses['final_synthesis'])
+                                st.markdown(synthesis)
                                 
-                                # Display suggestions only after synthesis
+                                # Display suggestions
                                 if st.session_state.suggestions:
                                     st.markdown("---")
                                     st.markdown("### 🤔 Explore Further")
