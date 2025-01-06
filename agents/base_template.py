@@ -64,8 +64,25 @@ class BaseAgent:
                 'text': "\nPrevious agent insights:\n" + "\n".join(previous_responses)
             })
         
-        # Add current user input
-        prompt.extend(user_input)
+        # Normalize user input
+        if isinstance(user_input, str):
+            normalized_input = [{'text': user_input}]
+        elif isinstance(user_input, dict):
+            normalized_input = [user_input]
+        elif isinstance(user_input, list):
+            if not user_input:
+                normalized_input = [{'text': ''}]
+            elif isinstance(user_input[0], str):
+                normalized_input = [{'text': user_input[0]}]
+            elif isinstance(user_input[0], dict) and 'text' in user_input[0]:
+                normalized_input = user_input
+            else:
+                normalized_input = [{'text': str(user_input[0])}]
+        else:
+            normalized_input = [{'text': str(user_input)}]
+        
+        # Add normalized user input
+        prompt.extend(normalized_input)
         
         return prompt
     
