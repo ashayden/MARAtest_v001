@@ -251,6 +251,7 @@ def process_file_upload(uploaded_file):
             img_byte_arr = io.BytesIO()
             img.save(img_byte_arr, format='JPEG')
             img_byte_arr = img_byte_arr.getvalue()
+            
             return {
                 'type': 'image',
                 'data': img_byte_arr,
@@ -295,23 +296,24 @@ def process_file_upload(uploaded_file):
         st.error(f"Error processing file: {str(e)}")
         return None
 
-def prepare_messages(text_input: str, file_data: dict = None) -> list:
+def prepare_messages(text_input: str, files_data: list = None) -> list:
     """Prepare messages for the Gemini model."""
     parts = []
     
-    # Add file content if present
-    if file_data:
-        if file_data['type'] == 'image':
-            parts.append({
-                'inline_data': {
-                    'mime_type': file_data['mime_type'],
-                    'data': base64.b64encode(file_data['data']).decode('utf-8')
-                }
-            })
-        elif file_data['type'] == 'text':
-            parts.append({
-                'text': f"Content from {file_data['name']}:\n{file_data['data']}"
-            })
+    # Add files content if present
+    if files_data:
+        for file_data in files_data:
+            if file_data['type'] == 'image':
+                parts.append({
+                    'inline_data': {
+                        'mime_type': file_data['mime_type'],
+                        'data': base64.b64encode(file_data['data']).decode('utf-8')
+                    }
+                })
+            elif file_data['type'] == 'text':
+                parts.append({
+                    'text': f"Content from {file_data['name']}:\n{file_data['data']}"
+                })
     
     # Add user's text input
     if text_input:
@@ -335,19 +337,21 @@ def chat_interface():
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
-                if "file_data" in message:
-                    if message["file_data"]["type"] == "image":
-                        st.image(message["file_data"]["display_data"])
-                    elif message["file_data"]["type"] == "text":
-                        with st.expander("📄 View File Content"):
-                            st.text(message["file_data"]["data"])
+                if "files_data" in message:
+                    for file_data in message["files_data"]:
+                        if file_data["type"] == "image":
+                            st.image(file_data["display_data"])
+                        elif file_data["type"] == "text":
+                            with st.expander(f"📄 {file_data['name']}"):
+                                st.text(file_data["data"])
     
     # Fixed input container at bottom
     with st.container():
-        # File uploader
-        uploaded_file = st.file_uploader(
+        # File uploader (multiple files)
+        uploaded_files = st.file_uploader(
             "📎 Attach files",
             type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+            accept_multiple_files=True,
             key="file_uploader"
         )
         
@@ -356,35 +360,38 @@ def chat_interface():
         
         # Handle input
         if prompt:
-            # Process uploaded file
-            file_data = None
-            if uploaded_file:
-                file_data = process_file_upload(uploaded_file)
-                if file_data:
-                    st.toast(f"📎 {file_data['name']} attached")
+            # Process uploaded files
+            files_data = []
+            if uploaded_files:
+                for uploaded_file in uploaded_files:
+                    file_data = process_file_upload(uploaded_file)
+                    if file_data:
+                        files_data.append(file_data)
+                        st.toast(f"📎 {file_data['name']} attached")
             
             # Display user message
             st.chat_message("user").write(prompt)
-            if file_data:
-                if file_data["type"] == "image":
-                    st.chat_message("user").image(file_data["display_data"])
-                else:
-                    st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
+            if files_data:
+                for file_data in files_data:
+                    if file_data["type"] == "image":
+                        st.chat_message("user").image(file_data["display_data"])
+                    else:
+                        st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
             
             # Add to history
             user_message = {
                 "role": "user",
                 "content": prompt,
-                "file_data": file_data
-            } if file_data else {
+                "files_data": files_data
+            } if files_data else {
                 "role": "user",
                 "content": prompt
             }
             st.session_state.messages.append(user_message)
             
             try:
-                # Prepare messages
-                parts = prepare_messages(prompt, file_data)
+                # Prepare messages with all files
+                parts = prepare_messages(prompt, files_data)
                 
                 # Generate response
                 model = genai.GenerativeModel('gemini-2.0-flash-exp')
