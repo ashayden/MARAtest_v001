@@ -419,9 +419,8 @@ def chat_interface():
             })
             
             try:
-                # Select appropriate model based on content
-                model_name = 'gemini-pro-vision' if file_data and file_data['type'] == 'image' else 'gemini-pro'
-                model = genai.GenerativeModel(model_name)
+                # Use Gemini 2.0 Flash model for all requests
+                model = genai.GenerativeModel('gemini-2.0-flash-exp')
                 
                 # Generate response
                 response = model.generate_content(
