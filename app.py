@@ -115,6 +115,32 @@ st.markdown("""
     margin: 0.5rem 0;
 }
 
+/* Processing status */
+.processing-message {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    margin: 0.5rem 0;
+    background-color: #2d2d2d;
+    border: 1px solid #404040;
+    border-radius: 8px;
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #4CAF50;
+    border-top: 2px solid transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 /* Chat input container */
 .stChatInput {
     position: fixed;
@@ -122,7 +148,7 @@ st.markdown("""
     left: 50%;
     transform: translateX(-50%);
     width: 800px;
-    max-width: calc(100% - 650px);
+    max-width: calc(100vw - 450px);
     padding: 1rem 2rem;
     background-color: #1a1a1a;
     border-top: 1px solid #404040;
@@ -167,16 +193,29 @@ header {visibility: hidden;}
     padding-bottom: 100px !important;
 }
 
-/* Remove collapsible container styling */
+/* Remove all expander styling */
 [data-testid="stExpander"] {
-    border: none !important;
-    box-shadow: none !important;
-    background-color: transparent !important;
+    display: none !important;
 }
 
 [data-testid="stExpanderContent"] {
+    display: block !important;
     border: none !important;
     padding: 0 !important;
+}
+
+/* Status indicator */
+[data-testid="stStatus"] {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    max-width: calc(100vw - 450px);
+    background-color: #2d2d2d;
+    border: 1px solid #404040;
+    border-radius: 8px;
+    z-index: 998;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -572,17 +611,12 @@ def get_domain_avatar(domain: str) -> str:
 def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None):
     """Process input through the collaborative agent system."""
     try:
-        # Create placeholders outside of state reset
-        progress_placeholder = st.empty()
+        # Create status container that stays visible
+        status_container = st.status("Processing...", expanded=True)
         error_container = st.empty()
         
         def update_progress(message):
-            progress_placeholder.markdown(f"""
-            <div class="processing-message">
-                <div class="spinner"></div>
-                <span>{message}</span>
-            </div>
-            """, unsafe_allow_html=True)
+            status_container.update(label=message, expanded=True)
         
         # Reset state for new request
         st.session_state.specialist_responses = {}
@@ -711,8 +745,8 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             except Exception as e:
                 error_container.error(f"Error generating suggestions: {str(e)}")
         
-        # Clear progress indicator only after everything is complete
-        progress_placeholder.empty()
+        # Update status to complete
+        status_container.update(label="Complete!", state="complete", expanded=False)
         return synthesis
         
     except Exception as e:
@@ -790,7 +824,25 @@ def display_message(message: dict):
     
     elif role == 'assistant':
         avatar = message.get("avatar", "🤖")
+        
+        # Get agent name based on message type and domain
+        if message_type == "initial_analysis":
+            agent_name = "Initial Analysis"
+        elif message_type == "specialist":
+            domain = message.get("domain", "").title()
+            agent_name = f"{domain} Specialist"
+        elif message_type == "synthesis":
+            agent_name = "Final Synthesis"
+        elif message_type == "suggestions":
+            agent_name = "Follow-up Questions"
+        else:
+            agent_name = "Assistant"
+        
         with st.chat_message("assistant", avatar=avatar):
+            # Display agent name at the top
+            st.markdown(f"**{avatar} {agent_name}**")
+            st.markdown("---")
+            
             # Display content
             st.markdown(content)
             
