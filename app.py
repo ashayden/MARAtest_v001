@@ -81,7 +81,7 @@ header {visibility: hidden;}
 
 /* Main container */
 .main {
-    padding-bottom: 80px;  /* Space for input */
+    padding-bottom: 100px;  /* Increased space for input */
 }
 
 /* Chat messages */
@@ -92,8 +92,8 @@ header {visibility: hidden;}
     margin-bottom: 1rem;
 }
 
-/* Input area */
-.input-container {
+/* Bottom input container */
+.bottom-container {
     position: fixed;
     bottom: 0;
     left: 0;
@@ -101,72 +101,62 @@ header {visibility: hidden;}
     background: var(--background-color);
     border-top: 1px solid var(--border-color);
     padding: 1rem;
+}
+
+/* File upload area */
+.upload-area {
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 8px;
+    background: var(--input-background);
     display: flex;
     align-items: center;
-    gap: 10px;
-    z-index: 1000;
+    gap: 0.5rem;
 }
 
-/* File uploader container */
-.file-upload-container {
-    position: relative;
-    width: 40px;
-    height: 40px;
-    display: flex;
+/* File upload icon */
+.upload-icon {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-}
-
-/* Style the actual file uploader */
-[data-testid="stFileUploader"] {
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 40px !important;
-    height: 40px !important;
-    opacity: 0 !important;
-    cursor: pointer !important;
-    z-index: 2 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
-/* Hide the default uploader label and container */
-[data-testid="stFileUploader"] > div {
-    display: none !important;
-}
-
-/* Paperclip icon */
-.file-upload-icon {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     color: var(--text-color);
     opacity: 0.7;
-    font-size: 18px;
-    transition: opacity 0.2s;
-    z-index: 1;
-    pointer-events: none;
+    margin-right: 0.5rem;
 }
 
-.file-upload-container:hover .file-upload-icon {
-    opacity: 1;
+/* File upload text */
+.upload-text {
+    color: var(--text-color);
+    opacity: 0.7;
+    font-size: 0.9rem;
 }
 
-/* Chat input styling */
+/* Chat input area */
+.input-area {
+    margin-top: 0.5rem;
+}
+
+/* Style Streamlit's chat input */
 .stChatInput {
     margin-bottom: 0 !important;
-    flex-grow: 1;
 }
 
 .stChatInput > div {
-    padding-left: 0 !important;
+    padding: 0 !important;
+}
+
+/* Style Streamlit's file uploader */
+[data-testid="stFileUploader"] {
+    opacity: 0;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    cursor: pointer;
+}
+
+[data-testid="stFileUploader"] > div {
+    display: none;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -381,24 +371,29 @@ def chat_interface():
                     with st.expander("📄 View File Content"):
                         st.text(message["file_data"]["data"])
     
-    # Create columns for input area
-    col1, col2 = st.columns([1, 15])
+    # Bottom container for file upload and input
+    st.markdown('<div class="bottom-container">', unsafe_allow_html=True)
     
-    # File uploader in first column
-    with col1:
-        st.markdown('<div class="file-upload-container">', unsafe_allow_html=True)
-        st.markdown('<div class="file-upload-icon">📎</div>', unsafe_allow_html=True)
-        uploaded_file = st.file_uploader(
-            "",
-            type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-            label_visibility="collapsed",
-            key="file_uploader"
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
+    # File upload area
+    st.markdown("""
+        <div class="upload-area">
+            <span class="upload-icon">📎</span>
+            <span class="upload-text">Click or drag files here</span>
+        </div>
+    """, unsafe_allow_html=True)
     
-    # Chat input in second column
-    with col2:
-        prompt = st.chat_input("Message")
+    # File uploader (positioned over the upload area)
+    uploaded_file = st.file_uploader(
+        "",
+        type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+        label_visibility="collapsed",
+        key="file_uploader"
+    )
+    
+    # Chat input
+    prompt = st.chat_input("Message")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
     
     # Handle input
     if prompt:
