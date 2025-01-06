@@ -15,9 +15,24 @@ class AgentOrchestrator:
     
     def initialize_base_agents(self):
         """Initialize the core set of specialized agents."""
+        # Create configs with fixed settings for base agents
+        initializer_config = AgentConfig(
+            temperature=0.5,    # Balanced setting for analysis
+            top_p=0.9,         # Slightly reduced for more focused analysis
+            top_k=40,          # Standard setting
+            max_output_tokens=2048  # Standard length
+        )
+        
+        reasoner_config = AgentConfig(
+            temperature=0.3,    # Lower temperature for more consistent synthesis
+            top_p=0.8,         # More focused on likely tokens
+            top_k=30,          # More constrained selection
+            max_output_tokens=3072  # Longer limit for comprehensive synthesis
+        )
+        
         # Initial agent analyzes input and determines needed specialists
         self.agents['initializer'] = BaseAgent(
-            self.config,
+            initializer_config,
             role="initializer"
         )
         self.agents['initializer'].system_prompt = """You are the initial analysis agent.
@@ -34,7 +49,7 @@ class AgentOrchestrator:
         
         # Reasoning agent synthesizes and refines responses
         self.agents['reasoner'] = BaseAgent(
-            self.config,
+            reasoner_config,
             role="reasoner"
         )
         self.agents['reasoner'].system_prompt = """You are the synthesis agent responsible for creating the final user-facing response.
@@ -64,6 +79,7 @@ class AgentOrchestrator:
     
     def create_specialist(self, expertise: str) -> BaseAgent:
         """Create a new specialist agent for a specific domain."""
+        # Use the main config for specialists (controlled by sidebar)
         specialist = BaseAgent(
             self.config,
             role=f"specialist_{expertise}"
