@@ -174,6 +174,34 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
 .final-synthesis {
     border-left-color: #9C27B0;
 }
+
+/* Spinner Animation */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+    margin-right: 10px;
+    vertical-align: middle;
+}
+
+.processing-message {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    margin: 10px 0;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -517,9 +545,14 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         parts = prepare_messages(prompt, files_data)
         specialist_responses = []
         
-        # Progress indicator
+        # Progress indicator with spinner
         progress_text = st.empty()
-        progress_text.markdown("🔄 _Analyzing input and identifying required expertise..._")
+        progress_text.markdown("""
+        <div class="processing-message">
+            <div class="spinner"></div>
+            <span>Consulting domain specialists...</span>
+        </div>
+        """, unsafe_allow_html=True)
         
         # Get initial analysis silently
         initial_response = ""
