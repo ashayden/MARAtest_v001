@@ -278,10 +278,15 @@ def process_file_upload(uploaded_file):
             # Gemini requires RGB format
             if img.mode != 'RGB':
                 img = img.convert('RGB')
+            # Convert image to bytes
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format='JPEG')
+            img_byte_arr = img_byte_arr.getvalue()
             return {
                 'type': 'image',
-                'data': img,
-                'mime_type': file_type,
+                'data': img_byte_arr,
+                'display_data': img,  # Keep original PIL Image for display
+                'mime_type': 'image/jpeg',  # Always use JPEG for consistency
                 'name': file_name
             }
             
@@ -328,13 +333,13 @@ def prepare_messages(text_input: str, file_data: dict = None) -> list:
     # Add file content if present
     if file_data:
         if file_data['type'] == 'image':
-            # For images, we need to pass the PIL Image object directly
             parts.append({
-                'mime_type': file_data['mime_type'],
-                'data': file_data['data']  # This is the PIL Image object
+                'inline_data': {
+                    'mime_type': file_data['mime_type'],
+                    'data': base64.b64encode(file_data['data']).decode('utf-8')
+                }
             })
         elif file_data['type'] == 'text':
-            # For text content, add it as a text part
             parts.append({
                 'text': f"Content from {file_data['name']}:\n{file_data['data']}"
             })
@@ -362,7 +367,7 @@ def chat_interface():
                 st.markdown(f"🧑 **You**: {msg['content']}")
                 if msg.get('file_data'):
                     if msg['file_data']['type'] == 'image':
-                        st.image(msg['file_data']['data'], caption=msg['file_data']['name'])
+                        st.image(msg['file_data']['display_data'], caption=msg['file_data']['name'])
                     elif msg['file_data']['type'] == 'text':
                         with st.expander(f"📄 {msg['file_data']['name']}"):
                             st.text(msg['file_data']['data'])
