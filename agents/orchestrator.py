@@ -112,6 +112,12 @@ class AgentOrchestrator:
     
     def identify_required_specialists(self, input_text: str) -> List[str]:
         """Analyze input to determine required specialist expertise."""
+        # Ensure input_text is a string
+        if isinstance(input_text, dict) and 'text' in input_text:
+            input_text = input_text['text']
+        elif isinstance(input_text, list) and input_text and isinstance(input_text[0], dict) and 'text' in input_text[0]:
+            input_text = input_text[0]['text']
+        
         prompt = f"""Analyze the following input and identify the key domains of expertise needed.
         Return only the domain names, separated by commas.
         
@@ -135,10 +141,18 @@ class AgentOrchestrator:
                     yield chunk
             
             # Identify needed specialists
-            if isinstance(user_input, list) and user_input and 'text' in user_input[0]:
-                domains = self.identify_required_specialists(user_input[0]['text'])
-            else:
-                domains = []
+            input_text = user_input
+            if isinstance(user_input, list) and user_input:
+                if isinstance(user_input[0], dict) and 'text' in user_input[0]:
+                    input_text = user_input[0]['text']
+                elif isinstance(user_input[0], str):
+                    input_text = user_input[0]
+            elif isinstance(user_input, dict) and 'text' in user_input:
+                input_text = user_input['text']
+            elif isinstance(user_input, str):
+                input_text = user_input
+            
+            domains = self.identify_required_specialists(input_text)
             
             # Collect specialist responses
             specialist_responses = []
