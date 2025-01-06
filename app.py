@@ -754,7 +754,13 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         error_container = st.empty()
         
         # Get initial analysis
-        progress.markdown("🔍 Performing initial analysis...")
+        progress.markdown("""
+        <div class="processing-message">
+            <div class="spinner"></div>
+            <span>Performing initial analysis...</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
         initial_response = ""
         for chunk in orchestrator.agents['initializer'].generate_response(parts, stream=True):
             if chunk:
@@ -773,7 +779,12 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         if domains:
             for domain in domains:
                 try:
-                    progress.markdown(f"🤔 Consulting {domain.title()} specialist...")
+                    progress.markdown(f"""
+                    <div class="processing-message">
+                        <div class="spinner"></div>
+                        <span>Consulting {domain.title()} specialist...</span>
+                    </div>
+                    """, unsafe_allow_html=True)
                     
                     if domain not in orchestrator.agents:
                         orchestrator.agents[domain] = orchestrator.create_specialist(domain)
@@ -808,7 +819,12 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     return None
         
         # Generate final synthesis
-        progress.markdown("🎯 Synthesizing insights...")
+        progress.markdown("""
+        <div class="processing-message">
+            <div class="spinner"></div>
+            <span>Synthesizing insights...</span>
+        </div>
+        """, unsafe_allow_html=True)
         
         # Collect all responses for synthesis
         synthesis_inputs = []
