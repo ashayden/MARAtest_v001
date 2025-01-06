@@ -477,9 +477,15 @@ def prepare_messages(text_input: str, files_data: list = None) -> list:
     
     # Add user's text input
     if text_input:
-        parts.append({
-            'text': text_input
-        })
+        if not parts:
+            # If no files, make text input the primary message
+            parts = [{'text': text_input}]
+        else:
+            # If there are files, append text input
+            parts.append({'text': text_input})
+    elif not parts:
+        # Ensure there's at least one message
+        parts = [{'text': ''}]
         
     return parts
 

@@ -132,26 +132,37 @@ class AgentOrchestrator:
     def process_input(self, user_input: list, stream: bool = True) -> Generator[str, None, None]:
         """Process input through the collaborative agent system."""
         try:
+            # Normalize input format
+            if isinstance(user_input, str):
+                normalized_input = [{'text': user_input}]
+            elif isinstance(user_input, dict):
+                normalized_input = [user_input]
+            elif isinstance(user_input, list):
+                if not user_input:
+                    normalized_input = [{'text': ''}]
+                elif isinstance(user_input[0], str):
+                    normalized_input = [{'text': user_input[0]}]
+                elif isinstance(user_input[0], dict) and 'text' in user_input[0]:
+                    normalized_input = user_input
+                else:
+                    normalized_input = [{'text': str(user_input[0])}]
+            else:
+                normalized_input = [{'text': str(user_input)}]
+
+            # Extract text for specialist identification
+            input_text = ''
+            if normalized_input and isinstance(normalized_input[0], dict) and 'text' in normalized_input[0]:
+                input_text = normalized_input[0]['text']
+            
             # Start initial analysis
             yield "### INITIAL_ANALYSIS:\n"
             initial_response = ""
-            for chunk in self.agents['initializer'].generate_response(user_input, stream=True):
+            for chunk in self.agents['initializer'].generate_response(normalized_input, stream=True):
                 initial_response += chunk
                 if stream:
                     yield chunk
             
-            # Extract text from input for specialist identification
-            input_text = user_input
-            if isinstance(user_input, list) and user_input:
-                if isinstance(user_input[0], dict) and 'text' in user_input[0]:
-                    input_text = user_input[0]['text']
-                elif isinstance(user_input[0], str):
-                    input_text = user_input[0]
-            elif isinstance(user_input, dict) and 'text' in user_input:
-                input_text = user_input['text']
-            elif isinstance(user_input, str):
-                input_text = user_input
-            
+            # Identify needed specialists
             domains = self.identify_required_specialists(input_text)
             
             # Collect specialist responses
@@ -163,12 +174,9 @@ class AgentOrchestrator:
                 # Mark start of specialist response
                 yield f"\n### SPECIALIST: {domain}\n"
                 
-                # Ensure consistent input format for specialist
-                specialist_input = [{'text': input_text}] if isinstance(input_text, str) else user_input
-                
                 specialist_response = ""
                 for chunk in self.agents[domain].generate_response(
-                    specialist_input,
+                    normalized_input,
                     previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
                     stream=True
                 ):
@@ -183,7 +191,7 @@ class AgentOrchestrator:
             # Start final synthesis
             yield "\n### FINAL_SYNTHESIS:\n"
             for chunk in self.agents['reasoner'].generate_response(
-                user_input,
+                normalized_input,
                 previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
                 stream=True
             ):
