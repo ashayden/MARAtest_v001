@@ -569,12 +569,6 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         else:
             domains = []
         
-        # Store current analysis in session state
-        st.session_state.current_analysis = {
-            'initial_response': initial_response,
-            'domains': domains
-        }
-        
         # Process specialist responses
         if domains:
             # Create placeholders for each specialist
@@ -616,9 +610,6 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     'domain': domain,
                     'response': specialist_response
                 })
-            
-            # Store specialist responses in session state
-            st.session_state.specialist_responses = specialist_responses
         
         # Generate synthesis
         progress_text.markdown("""
@@ -639,6 +630,18 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         
         # Clear progress indicator
         progress_text.empty()
+        
+        # Add to history without specialist responses
+        st.session_state.messages.append({
+            'role': 'user',
+            'content': prompt,
+            'files_data': files_data if files_data else None
+        })
+        
+        st.session_state.messages.append({
+            'role': 'assistant',
+            'content': synthesis
+        })
         
         return synthesis
         
@@ -663,18 +666,8 @@ def chat_interface():
         orchestrator = get_orchestrator()
         
         # Create persistent containers
-        specialist_container = st.container()
         chat_container = st.container()
         input_container = st.container()
-        
-        # Display specialist analysis if available
-        with specialist_container:
-            if st.session_state.specialist_responses:
-                with st.expander("🔍 Domain Expert Analysis", expanded=False):
-                    for response in st.session_state.specialist_responses:
-                        st.markdown(f"### {response['domain'].title()} Analysis")
-                        st.markdown(response['response'])
-                        st.divider()
         
         # Chat history
         with chat_container:
