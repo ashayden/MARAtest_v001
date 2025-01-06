@@ -734,6 +734,32 @@ def get_orchestrator():
     
     return st.session_state.orchestrator
 
+def get_domain_avatar(domain: str) -> str:
+    """Get avatar emoji for each domain/role."""
+    domain_avatars = {
+        'initial_analysis': '🎯',
+        'history': '📚',
+        'culture': '🎭',
+        'music': '🎵',
+        'food': '🍳',
+        'architecture': '🏛️',
+        'art': '🎨',
+        'literature': '📖',
+        'geography': '🗺️',
+        'economics': '📈',
+        'sociology': '👥',
+        'politics': '⚖️',
+        'science': '🔬',
+        'technology': '💻',
+        'environment': '🌿',
+        'sports': '⚽',
+        'religion': '🕊️',
+        'philosophy': '🤔',
+        'final_synthesis': '📊',
+        'suggestions': '💡'
+    }
+    return domain_avatars.get(domain.lower(), '🔍')
+
 def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None):
     """Process input through the collaborative agent system."""
     try:
@@ -763,7 +789,14 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 initial_response += chunk
         
         if initial_response:
-            st.session_state.specialist_responses['initial_analysis'] = initial_response
+            # Create initial analysis message
+            initial_message = {
+                "role": "assistant",
+                "type": "initial_analysis",
+                "content": initial_response,
+                "avatar": "🎯"
+            }
+            st.session_state.messages.append(initial_message)
         
         # Extract text content for specialist identification
         text_content = ""
@@ -794,13 +827,6 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     if initial_response:
                         previous_responses.append({'text': initial_response})
                     
-                    # Add previous specialist responses
-                    for prev_domain in st.session_state.current_domains:
-                        if prev_domain != domain and prev_domain in st.session_state.specialist_responses:
-                            prev_response = st.session_state.specialist_responses.get(prev_domain)
-                            if prev_response:
-                                previous_responses.append({'text': prev_response})
-                    
                     # Generate specialist response
                     specialist_response = ""
                     for chunk in orchestrator.agents[domain].generate_response(
@@ -812,7 +838,15 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                             specialist_response += chunk
                     
                     if specialist_response:
-                        st.session_state.specialist_responses[domain] = specialist_response
+                        # Create specialist message
+                        specialist_message = {
+                            "role": "assistant",
+                            "type": "specialist",
+                            "domain": domain,
+                            "content": specialist_response,
+                            "avatar": get_domain_avatar(domain)
+                        }
+                        st.session_state.messages.append(specialist_message)
                     
                 except Exception as e:
                     error_container.error(f"Error with {domain} specialist: {str(e)}")
@@ -828,14 +862,9 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         
         # Collect all responses for synthesis
         synthesis_inputs = []
-        if initial_response:
-            synthesis_inputs.append({'text': initial_response})
-        
-        for domain in st.session_state.current_domains:
-            if domain in st.session_state.specialist_responses:
-                response = st.session_state.specialist_responses[domain]
-                if response:
-                    synthesis_inputs.append({'text': response})
+        for message in st.session_state.messages:
+            if message["role"] == "assistant" and "content" in message:
+                synthesis_inputs.append({'text': message["content"]})
         
         # Generate synthesis
         synthesis = ""
@@ -848,34 +877,25 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 synthesis += chunk
         
         if synthesis:
-            st.session_state.specialist_responses['final_synthesis'] = synthesis
-            
-            # Create analysis message
-            analysis_message = {
+            # Create synthesis message
+            synthesis_message = {
                 "role": "assistant",
+                "type": "synthesis",
                 "content": synthesis,
-                "type": "analysis",
-                "responses": {
-                    "initial_analysis": initial_response,
-                    "specialists": {domain: st.session_state.specialist_responses[domain] 
-                                  for domain in st.session_state.current_domains},
-                    "final_synthesis": synthesis
-                }
+                "avatar": "📊"
             }
+            st.session_state.messages.append(synthesis_message)
             
-            # Generate suggestions and create separate message
+            # Generate and add suggestions
             suggestions = generate_suggestions(synthesis)
             if suggestions:
                 suggestions_message = {
                     "role": "assistant",
                     "type": "suggestions",
-                    "suggestions": suggestions
+                    "suggestions": suggestions,
+                    "avatar": "💡"
                 }
-                # Add both messages to history
-                st.session_state.messages.extend([analysis_message, suggestions_message])
-            else:
-                # Add only analysis message if no suggestions
-                st.session_state.messages.append(analysis_message)
+                st.session_state.messages.append(suggestions_message)
         
         # Clear progress indicator
         progress.empty()
@@ -952,29 +972,21 @@ def chat_interface():
                                         st.text(file_data["data"])
                 
                 elif message["role"] == "assistant":
-                    with st.chat_message("assistant"):
-                        if message.get("type") == "analysis":
-                            responses = message.get("responses", {})
-                            
-                            # Display initial analysis
-                            initial = responses.get("initial_analysis")
-                            if initial:
-                                with st.expander("🎯 Initial Analysis", expanded=False):
-                                    st.markdown(initial)
-                            
-                            # Display specialist responses
-                            specialists = responses.get("specialists", {})
-                            for domain, response in specialists.items():
-                                with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
-                                    st.markdown(response)
-                            
-                            # Display final synthesis
-                            synthesis = responses.get("final_synthesis")
-                            if synthesis:
-                                with st.expander("📊 Final Synthesis", expanded=True):
-                                    st.markdown(synthesis)
+                    avatar = message.get("avatar", "🤖")
+                    with st.chat_message("assistant", avatar=avatar):
+                        if message["type"] == "initial_analysis":
+                            st.markdown("### Initial Analysis")
+                            st.markdown(message["content"])
                         
-                        elif message.get("type") == "suggestions":
+                        elif message["type"] == "specialist":
+                            st.markdown(f"### {message['domain'].title()} Analysis")
+                            st.markdown(message["content"])
+                        
+                        elif message["type"] == "synthesis":
+                            st.markdown("### Final Synthesis")
+                            st.markdown(message["content"])
+                        
+                        elif message["type"] == "suggestions":
                             st.markdown("### 🤔 Explore Further")
                             cols = st.columns(3)
                             button_styles = ["💡", "🔄", "🌟"]
