@@ -84,10 +84,30 @@ st.markdown("""
     --hover-color: #45a049;
 }
 
-/* Hide Streamlit components */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
+/* Layout width control */
+.block-container {
+    max-width: 1400px !important;  /* Increased from 1200px */
+    padding-left: 5rem !important;
+    padding-right: 5rem !important;
+    padding-bottom: 200px !important;
+}
+
+/* Ensure content doesn't get hidden behind input */
+.main .block-container {
+    padding-bottom: 200px !important;
+}
+
+/* Chat container */
+.chat-container {
+    margin-bottom: 140px;  /* Space for input area */
+}
+
+/* Response container styling */
+.response-container {
+    position: relative;
+    padding-right: 2.5rem;
+    width: 100%;
+}
 
 /* Expander styling */
 .streamlit-expanderHeader {
@@ -96,18 +116,22 @@ header {visibility: hidden;}
     border-radius: 8px !important;
     padding: 1rem !important;
     margin-bottom: 0.5rem !important;
+    width: 100% !important;
 }
 
-.streamlit-expanderHeader:hover {
-    background-color: #363636 !important;
+/* Question response styling */
+.question-response {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--input-background);
+    border-radius: 8px;
+    width: 100%;
 }
 
-.streamlit-expanderContent {
-    background-color: var(--background-color) !important;
-    border: none !important;
-    border-radius: 0 0 8px 8px !important;
-    padding: 1rem !important;
-}
+/* Hide Streamlit components */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
 
 /* Sidebar menu items */
 section[data-testid="stSidebar"] .streamlit-expanderHeader {
@@ -167,11 +191,6 @@ section[data-testid="stSidebar"] .streamlit-expanderContent {
 /* Ensure consistent spacing in expanders */
 .streamlit-expanderContent {
     padding: 1rem !important;
-}
-
-/* Chat container */
-.chat-container {
-    margin-bottom: 140px;  /* Space for input area */
 }
 
 /* Input container */
@@ -1042,102 +1061,86 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
 def chat_interface():
     """Modern chat interface with minimal design."""
     try:
+        # Set page config for wider layout
+        st.set_page_config(
+            page_title="AI Assistant",
+            layout="wide",
+            initial_sidebar_state="expanded"
+        )
+        
         st.title("AI Assistant")
         initialize_session_state()
         model_settings_sidebar()
         orchestrator = get_orchestrator()
         
-        # Input area at top
-        input_container = st.container()
-        with input_container:
-            uploaded_files = st.file_uploader(
-                "📎 Attach files",
-                type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-                accept_multiple_files=True,
-                key=st.session_state.file_uploader_key,
-                label_visibility="collapsed"
-            )
-            prompt = st.chat_input("Message", key="chat_input")
-            st.markdown("---")
+        # Create main container for chat
+        main_container = st.container()
         
-        # Process new input
-        if prompt:
-            files_data = []
-            if uploaded_files:
-                for uploaded_file in uploaded_files:
-                    file_data = process_file_upload(uploaded_file)
-                    if file_data:
-                        files_data.append(file_data)
-                        st.toast(f"📎 {file_data['name']} attached")
+        with main_container:
+            # Input area at top
+            input_container = st.container()
+            with input_container:
+                uploaded_files = st.file_uploader(
+                    "📎 Attach files",
+                    type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+                    accept_multiple_files=True,
+                    key=st.session_state.file_uploader_key,
+                    label_visibility="collapsed"
+                )
+                prompt = st.chat_input("Message", key="chat_input")
+                st.markdown("---")
             
-            # Add user message to history
-            st.session_state.messages.append({
-                "role": "user",
-                "content": prompt,
-                "files_data": files_data if files_data else None
-            })
-            
-            try:
-                # Process through orchestrator
-                response = process_with_orchestrator(orchestrator, prompt, files_data if files_data else None)
-                if response:
-                    st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-                if st.checkbox("Show detailed error"):
-                    st.error("Full error details:", exc_info=True)
-        
-        # Display chat history
-        messages_container = st.container()
-        with messages_container:
-            for message in st.session_state.messages:
-                if message["role"] == "user":
-                    with st.chat_message("user"):
-                        st.write(message["content"])
-                        if message.get("files_data"):
-                            for file_data in message["files_data"]:
-                                if file_data["type"] == "image":
-                                    st.image(file_data["display_data"])
-                                elif file_data["type"] == "text":
-                                    with st.expander(f"📄 {file_data['name']}", expanded=False):
-                                        st.text(file_data["data"])
-                
-                elif message["role"] == "assistant":
-                    avatar = message.get("avatar", "🤖")
-                    with st.chat_message("assistant", avatar=avatar):
-                        if message["type"] == "initial_analysis":
-                            col1, col2 = st.columns([20, 1])
-                            with col1:
-                                with st.expander("Initial Analysis", expanded=False):
-                                    st.markdown(message["content"])
-                            with col2:
-                                if st.button("⋮", key=f"menu_initial_{hash(str(message))}", help="Copy content"):
-                                    copy_to_clipboard(message["content"])
-                        
-                        elif message["type"] == "specialist":
-                            col1, col2 = st.columns([20, 1])
-                            with col1:
-                                with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
-                                    st.markdown(message["content"])
-                            with col2:
-                                if st.button("⋮", key=f"menu_specialist_{hash(str(message))}", help="Copy content"):
-                                    copy_to_clipboard(message["content"])
-                        
-                        elif message["type"] == "synthesis":
-                            col1, col2 = st.columns([20, 1])
-                            with col1:
-                                with st.expander("Final Synthesis", expanded=True):
-                                    st.markdown(message["content"])
-                            with col2:
-                                if st.button("⋮", key=f"menu_synthesis_{hash(str(message))}", help="Copy content"):
-                                    copy_to_clipboard(message["content"])
-                        
-                        elif message["type"] == "suggestions":
-                            st.markdown("")  # Add spacing
-                            col1, col2 = st.columns([20, 1])
-                            with col1:
-                                with st.expander("Explore Further", expanded=True):
-                                    for idx, (headline, full_question) in enumerate(message["suggestions"]):
+            # Display chat history
+            messages_container = st.container()
+            with messages_container:
+                for message in st.session_state.messages:
+                    if message["role"] == "user":
+                        with st.chat_message("user"):
+                            st.write(message["content"])
+                            if message.get("files_data"):
+                                for file_data in message["files_data"]:
+                                    if file_data["type"] == "image":
+                                        st.image(file_data["display_data"])
+                                    elif file_data["type"] == "text":
+                                        with st.expander(f"📄 {file_data['name']}", expanded=False):
+                                            st.text(file_data["data"])
+                    
+                    elif message["role"] == "assistant":
+                        avatar = message.get("avatar", "🤖")
+                        with st.chat_message("assistant", avatar=avatar):
+                            if message["type"] == "initial_analysis":
+                                col1, col2 = st.columns([20, 1])
+                                with col1:
+                                    with st.expander("Initial Analysis", expanded=False):
+                                        st.markdown(message["content"])
+                                with col2:
+                                    if st.button("⋮", key=f"menu_initial_{hash(str(message))}", help="Copy content"):
+                                        copy_to_clipboard(message["content"])
+                            
+                            elif message["type"] == "specialist":
+                                col1, col2 = st.columns([20, 1])
+                                with col1:
+                                    with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
+                                        st.markdown(message["content"])
+                                with col2:
+                                    if st.button("⋮", key=f"menu_specialist_{hash(str(message))}", help="Copy content"):
+                                        copy_to_clipboard(message["content"])
+                            
+                            elif message["type"] == "synthesis":
+                                col1, col2 = st.columns([20, 1])
+                                with col1:
+                                    with st.expander("Final Synthesis", expanded=True):
+                                        st.markdown(message["content"])
+                                with col2:
+                                    if st.button("⋮", key=f"menu_synthesis_{hash(str(message))}", help="Copy content"):
+                                        copy_to_clipboard(message["content"])
+                            
+                            elif message["type"] == "suggestions":
+                                st.markdown("")  # Add spacing
+                                st.markdown("### 🤔 Explore Further")
+                                for idx, (headline, full_question) in enumerate(message["suggestions"]):
+                                    col1, col2 = st.columns([20, 1])
+                                    with col1:
                                         if st.button(
                                             headline,
                                             key=f"suggestion_{idx}_{hash(str(message))}",
@@ -1146,16 +1149,44 @@ def chat_interface():
                                         ):
                                             st.session_state.next_prompt = full_question
                                             st.rerun()
-                            with col2:
-                                if st.button("⋮", key=f"menu_suggestions_{hash(str(message))}", help="Copy all suggestions"):
-                                    suggestions_text = "\n\n".join([f"{h}\n{q}" for h, q in message["suggestions"]])
-                                    copy_to_clipboard(suggestions_text)
-        
-        # Handle suggestion clicks
-        if 'next_prompt' in st.session_state:
-            prompt = st.session_state.next_prompt
-            del st.session_state.next_prompt
+                                    with col2:
+                                        if st.button("⋮", key=f"menu_suggestion_{idx}_{hash(str(message))}", help="Copy suggestion"):
+                                            copy_to_clipboard(f"{headline}\n{full_question}")
+            else:
+                st.markdown(message["content"])
+
+            # Process new input
+            if prompt:
+                files_data = []
+                if uploaded_files:
+                    for uploaded_file in uploaded_files:
+                        file_data = process_file_upload(uploaded_file)
+                        if file_data:
+                            files_data.append(file_data)
+                            st.toast(f"📎 {file_data['name']} attached")
+                
+                # Add user message to history
+                st.session_state.messages.append({
+                    "role": "user",
+                    "content": prompt,
+                    "files_data": files_data if files_data else None
+                })
+                
+                try:
+                    # Process through orchestrator
+                    response = process_with_orchestrator(orchestrator, prompt, files_data if files_data else None)
+                    if response:
+                        st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+                    if st.checkbox("Show detailed error"):
+                        st.error("Full error details:", exc_info=True)
             
+            # Handle suggestion clicks
+            if 'next_prompt' in st.session_state:
+                prompt = st.session_state.next_prompt
+                del st.session_state.next_prompt
+                
     except Exception as e:
         st.error(f"Error in chat interface: {str(e)}")
         if st.checkbox("Show detailed error"):
@@ -1167,26 +1198,57 @@ def display_message(message: dict):
     content = message.get('content', '')
     
     if role == 'user':
-        st.markdown(f"**You:** {content}")
+        with st.chat_message("user"):
+            st.markdown(content)
     elif role == 'assistant':
-        if 'type' in message:
-            if message['type'] == 'initial_analysis':
-                with st.expander("Initial Analysis", expanded=False):
-                    st.markdown(message['content'])
-            elif message['type'] == 'specialist':
-                with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
-                    st.markdown(message['content'])
-            elif message['type'] == 'synthesis':
-                with st.expander("Final Synthesis", expanded=True):
-                    st.markdown(message['content'])
-            elif message['type'] == 'suggestions':
+        avatar = message.get("avatar", "🤖")
+        with st.chat_message("assistant", avatar=avatar):
+            if message.get("type") == "initial_analysis":
+                col1, col2 = st.columns([20, 1])
+                with col1:
+                    with st.expander("Initial Analysis", expanded=False):
+                        st.markdown(message["content"])
+                with col2:
+                    if st.button("⋮", key=f"menu_initial_{hash(str(message))}", help="Copy content"):
+                        copy_to_clipboard(message["content"])
+            
+            elif message.get("type") == "specialist":
+                col1, col2 = st.columns([20, 1])
+                with col1:
+                    with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
+                        st.markdown(message["content"])
+                with col2:
+                    if st.button("⋮", key=f"menu_specialist_{hash(str(message))}", help="Copy content"):
+                        copy_to_clipboard(message["content"])
+            
+            elif message.get("type") == "synthesis":
+                col1, col2 = st.columns([20, 1])
+                with col1:
+                    with st.expander("Final Synthesis", expanded=True):
+                        st.markdown(message["content"])
+                with col2:
+                    if st.button("⋮", key=f"menu_synthesis_{hash(str(message))}", help="Copy content"):
+                        copy_to_clipboard(message["content"])
+            
+            elif message.get("type") == "suggestions":
+                st.markdown("")  # Add spacing
                 st.markdown("### 🤔 Explore Further")
-                for headline, full_question in message['suggestions']:
-                    if st.button(headline, help=full_question):
-                        st.session_state.next_prompt = full_question
-                        st.rerun()
-        else:
-            st.markdown(f"**AI Assistant:** {content}")
+                for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
+                    col1, col2 = st.columns([20, 1])
+                    with col1:
+                        if st.button(
+                            headline,
+                            key=f"suggestion_{idx}_{hash(str(message))}",
+                            help=full_question,
+                            use_container_width=True
+                        ):
+                            st.session_state.next_prompt = full_question
+                            st.rerun()
+                    with col2:
+                        if st.button("⋮", key=f"menu_suggestion_{idx}_{hash(str(message))}", help="Copy suggestion"):
+                            copy_to_clipboard(f"{headline}\n{full_question}")
+            else:
+                st.markdown(content)
 
 if __name__ == "__main__":
     # Load environment variables
