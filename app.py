@@ -121,8 +121,8 @@ st.markdown("""
     bottom: 0;
     left: 50%;
     transform: translateX(-50%);
-    width: 67%;
-    max-width: 800px;
+    width: 80%;
+    max-width: 600px;
     background-color: #1a1a1a;
     padding: 1rem;
     z-index: 999;
@@ -713,7 +713,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 error_container.error(f"Error generating suggestions: {str(e)}")
         
         # Update status to complete
-        status_container.update(label="Complete!", state="complete", expanded=False)
+        status_container.write("Complete!")
         return synthesis
         
     except Exception as e:
@@ -786,13 +786,11 @@ def display_message(message: dict):
     message_type = message.get('type', '')
     
     if role == 'user':
-        with st.chat_message("user"):
-            st.markdown(content)
+        st.chat_message("user").markdown(content)
     
     elif role == 'assistant':
         avatar = message.get("avatar", "🤖")
-        
-        # Get agent name based on message type and domain
+        agent_name = "Assistant"
         if message_type == "initial_analysis":
             agent_name = "Initial Analysis"
         elif message_type == "specialist":
@@ -802,40 +800,29 @@ def display_message(message: dict):
             agent_name = "Final Synthesis"
         elif message_type == "suggestions":
             agent_name = "Follow-up Questions"
-        else:
-            agent_name = "Assistant"
-        
-        with st.chat_message("assistant", avatar=avatar):
-            # Display agent name at the top
-            st.markdown(f"**{avatar} {agent_name}**")
-            st.markdown("---")
-            
-            # Display content
-            st.markdown(content)
-            
-            # Add copy button if not suggestions
-            if message_type != "suggestions":
-                if st.button("📋 Copy", key=f"copy_{hash(content)}"):
-                    copy_to_clipboard(content)
-            
-            # Add download button for synthesis
-            if message_type == "synthesis":
-                report_content = generate_full_report()
-                st.download_button(
-                    "💾 Download Report",
-                    report_content,
-                    file_name="analysis_report.md",
-                    mime="text/markdown",
-                    key=f"download_{hash(content)}"
-                )
-            
-            # Display suggestions as buttons
-            if message_type == "suggestions":
-                st.markdown("### Follow-up Questions")
-                for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
-                    if st.button(f"💡 {headline}", key=f"suggest_{idx}_{hash(str(headline))}"):
-                        st.session_state.next_prompt = full_question
-                        st.rerun()
+
+        st.chat_message("assistant", avatar=avatar).markdown(f"**{avatar} {agent_name}**\n---\n{content}")
+
+        if message_type != "suggestions":
+            if st.button("📋 Copy", key=f"copy_{hash(content)}"):
+                copy_to_clipboard(content)
+
+        if message_type == "synthesis":
+            report_content = generate_full_report()
+            st.download_button(
+                "💾 Download Report",
+                report_content,
+                file_name="analysis_report.md",
+                mime="text/markdown",
+                key=f"download_{hash(content)}"
+            )
+
+        if message_type == "suggestions":
+            st.markdown("### Follow-up Questions")
+            for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
+                if st.button(f"💡 {headline}", key=f"suggest_{idx}_{hash(str(headline))}"):
+                    st.session_state.next_prompt = full_question
+                    st.rerun()
 
 def generate_full_report() -> str:
     """Generate a full report from all messages."""
