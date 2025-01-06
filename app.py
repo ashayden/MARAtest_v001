@@ -518,11 +518,8 @@ def how_it_works_sidebar():
 def model_settings_sidebar():
     """Sidebar for model settings."""
     with st.sidebar:
-        # Add How it Works section
-        how_it_works_sidebar()
-        
         # Model Settings section
-        with st.expander("⚙️ Model Settings", expanded=True):
+        with st.expander("⚙️ Model Settings", expanded=False):
             st.subheader("🔬 Domain Specialist Settings")
             st.info("""
             Adjust these settings to control how domain specialists analyze and respond to queries.
@@ -568,6 +565,12 @@ def model_settings_sidebar():
                 step=256,
                 help="Maximum length of specialist responses"
             )
+        
+        # Add spacer before How it Works section
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        
+        # Add How it Works section at the bottom
+        how_it_works_sidebar()
 
 def get_orchestrator():
     """Get or create the agent orchestrator."""
