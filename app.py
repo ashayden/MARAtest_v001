@@ -536,28 +536,39 @@ def chat_interface():
                 
                 # Generate response using current settings
                 model = genai.GenerativeModel('gemini-2.0-flash-exp')
-                response = model.generate_content(
-                    parts,
-                    generation_config={
-                        'temperature': st.session_state.temperature,
-                        'top_p': st.session_state.top_p,
-                        'top_k': st.session_state.top_k,
-                        'max_output_tokens': st.session_state.max_output_tokens,
-                    }
-                )
                 
-                # Display response
+                # Create a placeholder for the streaming response
                 with st.chat_message("assistant"):
-                    st.write(response.text)
+                    response_placeholder = st.empty()
+                    full_response = ""
+                    
+                    # Stream the response
+                    for chunk in model.generate_content(
+                        parts,
+                        generation_config={
+                            'temperature': st.session_state.temperature,
+                            'top_p': st.session_state.top_p,
+                            'top_k': st.session_state.top_k,
+                            'max_output_tokens': st.session_state.max_output_tokens,
+                        },
+                        stream=True
+                    ):
+                        if chunk.text:
+                            full_response += chunk.text
+                            # Update the placeholder with the accumulated response
+                            response_placeholder.markdown(full_response + "▌")
+                    
+                    # Final update without the cursor
+                    response_placeholder.markdown(full_response)
                 
                 # Add to history
                 st.session_state.messages.append({
                     "role": "assistant",
-                    "content": response.text
+                    "content": full_response
                 })
                 
                 # Generate new suggestions
-                st.session_state.suggestions = generate_suggestions(response.text)
+                st.session_state.suggestions = generate_suggestions(full_response)
                 
                 # Update file uploader key to clear files
                 st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
