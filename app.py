@@ -132,25 +132,21 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
 
 def initialize_session_state():
     """Initialize session state variables."""
-    if 'messages' not in st.session_state:
-        st.session_state.messages = []
-    if 'agent' not in st.session_state:
-        st.session_state.agent = ResponseAgent()
-    if 'suggestions' not in st.session_state:
-        st.session_state.suggestions = []
-    if 'clear_files' not in st.session_state:
-        st.session_state.clear_files = False
-    if 'file_uploader_key' not in st.session_state:
-        st.session_state.file_uploader_key = "file_uploader_0"
-    # Initialize model settings
-    if 'temperature' not in st.session_state:
-        st.session_state.temperature = 0.7
-    if 'top_p' not in st.session_state:
-        st.session_state.top_p = 0.95
-    if 'top_k' not in st.session_state:
-        st.session_state.top_k = 40
-    if 'max_output_tokens' not in st.session_state:
-        st.session_state.max_output_tokens = 2048
+    # Initialize all session state variables at startup
+    defaults = {
+        'messages': [],
+        'suggestions': [],
+        'clear_files': False,
+        'file_uploader_key': "file_uploader_0",
+        'temperature': 0.7,
+        'top_p': 0.95,
+        'top_k': 40,
+        'max_output_tokens': 2048
+    }
+    
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
 def convert_to_pdf(content: str) -> Optional[bytes]:
     """Convert content to PDF format."""
@@ -209,12 +205,33 @@ def generate_suggestions(content: str) -> list:
     """
     
     try:
-        response = st.session_state.agent.generate_response(prompt, stream=False)
-        suggestions = [s.strip() for s in response.split('\n') if s.strip()]
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                'temperature': 0.9,
+                'top_p': 0.95,
+                'top_k': 40,
+                'max_output_tokens': 1024,
+            }
+        )
+        suggestions = [s.strip() for s in response.text.split('\n') if s.strip() and not s.strip().startswith(('1.', '2.', '3.', '4.'))]
         return suggestions[:4]
     except Exception as e:
         st.error(f"Error generating suggestions: {str(e)}")
         return []
+
+def display_suggestions():
+    """Display suggestion buttons."""
+    if st.session_state.suggestions:
+        st.write("Follow-up Questions:")
+        cols = st.columns(2)
+        for idx, suggestion in enumerate(st.session_state.suggestions):
+            with cols[idx % 2]:
+                if st.button(suggestion, key=f"suggestion_{idx}"):
+                    # When clicked, use this as the next prompt
+                    st.session_state.next_prompt = suggestion
+                    st.rerun()
 
 def copy_to_clipboard(text: str):
     """Copy text to clipboard."""
@@ -400,12 +417,7 @@ def chat_interface():
     st.title("AI Assistant")
     
     # Initialize session state
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "clear_files" not in st.session_state:
-        st.session_state.clear_files = False
-    if "file_uploader_key" not in st.session_state:
-        st.session_state.file_uploader_key = "file_uploader_0"
+    initialize_session_state()
     
     # Show model settings sidebar
     model_settings_sidebar()
@@ -423,6 +435,10 @@ def chat_interface():
                         elif file_data["type"] == "text":
                             with st.expander(f"📄 {file_data['name']}"):
                                 st.text(file_data["data"])
+        
+        # Display suggestions after the last message
+        if st.session_state.messages:
+            display_suggestions()
     
     # Fixed input container at bottom
     with st.container():
@@ -436,6 +452,11 @@ def chat_interface():
         
         # Chat input
         prompt = st.chat_input("Message")
+        
+        # Check for suggestion click
+        if 'next_prompt' in st.session_state:
+            prompt = st.session_state.next_prompt
+            del st.session_state.next_prompt
         
         # Handle input
         if prompt:
@@ -493,6 +514,9 @@ def chat_interface():
                     "role": "assistant",
                     "content": response.text
                 })
+                
+                # Generate new suggestions
+                st.session_state.suggestions = generate_suggestions(response.text)
                 
                 # Update file uploader key to clear files
                 st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
