@@ -496,26 +496,38 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             else:
                 domains = []
             
-            # Collect specialist responses
-            for domain in domains:
-                if domain not in orchestrator.agents:
-                    orchestrator.agents[domain] = orchestrator.create_specialist(domain)
-                
-                specialist_response = ""
-                for chunk in orchestrator.agents[domain].generate_response(
-                    parts,
-                    previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
-                    stream=True
-                ):
-                    specialist_response += chunk
-                
-                specialist_responses.append({
-                    'domain': domain,
-                    'response': specialist_response
-                })
+            # Display specialist responses in expandable container first
+            if domains:
+                with st.expander("🔍 Detailed Analysis by Domain Experts", expanded=False):
+                    # Collect specialist responses
+                    for domain in domains:
+                        if domain not in orchestrator.agents:
+                            orchestrator.agents[domain] = orchestrator.create_specialist(domain)
+                        
+                        st.markdown(f"### {domain.title()} Analysis")
+                        
+                        specialist_response = ""
+                        response_placeholder = st.empty()
+                        
+                        for chunk in orchestrator.agents[domain].generate_response(
+                            parts,
+                            previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
+                            stream=True
+                        ):
+                            specialist_response += chunk
+                            response_placeholder.markdown(specialist_response + "▌")
+                        
+                        response_placeholder.markdown(specialist_response)
+                        specialist_responses.append({
+                            'domain': domain,
+                            'response': specialist_response
+                        })
+                        st.divider()
             
-            # Get final synthesis
+            # Display final synthesis
+            synthesis_placeholder = st.empty()
             synthesis = ""
+            
             for chunk in orchestrator.agents['reasoner'].generate_response(
                 parts,
                 previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
@@ -523,19 +535,10 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             ):
                 if chunk:
                     synthesis += chunk
-                    response_placeholder.markdown(synthesis + "▌")
+                    synthesis_placeholder.markdown(synthesis + "▌")
             
             # Final update without cursor
-            response_placeholder.markdown(synthesis)
-            
-            # Display specialist responses in expandable containers
-            if specialist_responses:
-                with st.expander("🔍 View Specialist Analysis", expanded=False):
-                    for specialist in specialist_responses:
-                        st.markdown(f"### {specialist['domain'].title()} Specialist")
-                        st.markdown(specialist['response'])
-                        st.divider()
-            
+            synthesis_placeholder.markdown(synthesis)
             full_response = synthesis
         
         return full_response

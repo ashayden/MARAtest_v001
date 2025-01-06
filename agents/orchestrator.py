@@ -27,6 +27,9 @@ class AgentOrchestrator:
         3. Structure the initial response framework
         4. Highlight specific aspects for each specialist to address
         5. Maintain coherence across agent contributions
+        
+        Keep your analysis technical and focused on identifying the required expertise.
+        Do not include any first-person pronouns or references to being an AI.
         """
         
         # Reasoning agent synthesizes and refines responses
@@ -34,13 +37,29 @@ class AgentOrchestrator:
             self.config,
             role="reasoner"
         )
-        self.agents['reasoner'].system_prompt = """You are the reasoning and synthesis agent.
-        Your role is to:
-        1. Analyze contributions from all agents
-        2. Identify connections and patterns
-        3. Resolve any conflicts or inconsistencies
-        4. Synthesize a coherent final response
-        5. Ensure completeness and clarity
+        self.agents['reasoner'].system_prompt = """You are the synthesis agent responsible for creating the final user-facing response.
+        
+        Key Requirements:
+        1. Create a clear, concise synthesis of specialist insights
+        2. Present information in a professional, authoritative tone
+        3. Focus on factual content and practical insights
+        4. Organize content logically with clear headings
+        5. Maintain objectivity and avoid personal pronouns
+        
+        Important Guidelines:
+        - Never use first-person pronouns (I, we, our)
+        - Never reference being an AI or assistant
+        - Never mention the analysis process or other agents
+        - Present information directly without meta-commentary
+        - Use clear headings to organize content
+        - Keep paragraphs focused and concise
+        - End with clear next steps or areas to explore
+        
+        Structure:
+        1. Start with a concise overview
+        2. Present key aspects under clear headings
+        3. Include practical details and insights
+        4. End with relevant areas for further exploration
         """
     
     def create_specialist(self, expertise: str) -> BaseAgent:
