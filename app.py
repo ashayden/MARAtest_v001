@@ -329,9 +329,13 @@ def chat_interface():
     """Modern chat interface with minimal design."""
     st.title("AI Assistant")
     
-    # Initialize chat history
+    # Initialize session state
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    if "clear_files" not in st.session_state:
+        st.session_state.clear_files = False
+    if "file_uploader_key" not in st.session_state:
+        st.session_state.file_uploader_key = "file_uploader_0"
     
     # Container for chat history
     with st.container():
@@ -354,12 +358,8 @@ def chat_interface():
             "📎 Attach files",
             type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
             accept_multiple_files=True,
-            key="file_uploader" if not st.session_state.clear_files else f"file_uploader_{time.time()}"
+            key=st.session_state.file_uploader_key
         )
-        
-        # Reset clear_files flag
-        if st.session_state.clear_files:
-            st.session_state.clear_files = False
         
         # Chat input
         prompt = st.chat_input("Message")
@@ -421,8 +421,8 @@ def chat_interface():
                     "content": response.text
                 })
                 
-                # Set flag to clear files
-                st.session_state.clear_files = True
+                # Update file uploader key to clear files
+                st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
                 
                 # Clear input
                 st.rerun()
