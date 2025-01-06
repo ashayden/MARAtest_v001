@@ -11,9 +11,17 @@ from PIL import Image
 import mimetypes
 import traceback
 import sys
+import streamlit.config as st_config
 
 # Load environment variables
 load_dotenv()
+
+# Configure Streamlit for reduced file watching
+try:
+    st_config.set_option('server.fileWatcherType', 'none')
+except Exception:
+    # Fallback if setting option fails
+    pass
 
 # Configure Gemini
 api_key = os.getenv('GOOGLE_API_KEY')
@@ -550,121 +558,136 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
 
 def chat_interface():
     """Modern chat interface with minimal design."""
-    st.title("AI Assistant")
-    
-    # Initialize session state
-    initialize_session_state()
-    
-    # Show model settings sidebar
-    model_settings_sidebar()
-    
-    # Get orchestrator
-    orchestrator = get_orchestrator()
-    
-    # Create persistent containers
-    specialist_container = st.container()
-    chat_container = st.container()
-    input_container = st.container()
-    
-    # Display specialist analysis if available
-    with specialist_container:
-        if st.session_state.specialist_responses:
-            with st.expander("🔍 Domain Expert Analysis", expanded=False):
-                for response in st.session_state.specialist_responses:
-                    st.markdown(f"### {response['domain'].title()} Analysis")
-                    st.markdown(response['response'])
-                    st.divider()
-    
-    # Chat history
-    with chat_container:
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
-                if "files_data" in message:
-                    for file_data in message["files_data"]:
-                        if file_data["type"] == "image":
-                            st.image(file_data["display_data"])
-                        elif file_data["type"] == "text":
-                            with st.expander(f"📄 {file_data['name']}"):
-                                st.text(file_data["data"])
+    try:
+        st.title("AI Assistant")
         
-        # Display suggestions after the last message
-        if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
-            display_suggestions()
-    
-    # Fixed input container at bottom
-    with input_container:
-        # File uploader (multiple files)
-        uploaded_files = st.file_uploader(
-            "📎 Attach files",
-            type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-            accept_multiple_files=True,
-            key=st.session_state.file_uploader_key
-        )
+        # Initialize session state
+        initialize_session_state()
         
-        # Chat input
-        prompt = st.chat_input("Message")
+        # Show model settings sidebar
+        model_settings_sidebar()
         
-        # Check for suggestion click
-        if 'next_prompt' in st.session_state:
-            prompt = st.session_state.next_prompt
-            del st.session_state.next_prompt
+        # Get orchestrator
+        orchestrator = get_orchestrator()
         
-        # Handle input
-        if prompt:
-            # Process uploaded files
-            files_data = []
-            if uploaded_files:
-                for uploaded_file in uploaded_files:
-                    file_data = process_file_upload(uploaded_file)
-                    if file_data:
-                        files_data.append(file_data)
-                        st.toast(f"📎 {file_data['name']} attached")
+        # Create persistent containers
+        specialist_container = st.container()
+        chat_container = st.container()
+        input_container = st.container()
+        
+        # Display specialist analysis if available
+        with specialist_container:
+            if st.session_state.specialist_responses:
+                with st.expander("🔍 Domain Expert Analysis", expanded=False):
+                    for response in st.session_state.specialist_responses:
+                        st.markdown(f"### {response['domain'].title()} Analysis")
+                        st.markdown(response['response'])
+                        st.divider()
+        
+        # Chat history
+        with chat_container:
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.write(message["content"])
+                    if "files_data" in message:
+                        for file_data in message["files_data"]:
+                            if file_data["type"] == "image":
+                                st.image(file_data["display_data"])
+                            elif file_data["type"] == "text":
+                                with st.expander(f"📄 {file_data['name']}"):
+                                    st.text(file_data["data"])
             
-            # Display user message
-            st.chat_message("user").write(prompt)
-            if files_data:
-                for file_data in files_data:
-                    if file_data["type"] == "image":
-                        st.chat_message("user").image(file_data["display_data"])
-                    else:
-                        st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
+            # Display suggestions after the last message
+            if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
+                display_suggestions()
+        
+        # Fixed input container at bottom
+        with input_container:
+            # File uploader (multiple files)
+            uploaded_files = st.file_uploader(
+                "📎 Attach files",
+                type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+                accept_multiple_files=True,
+                key=st.session_state.file_uploader_key
+            )
             
-            # Add to history
-            user_message = {
-                "role": "user",
-                "content": prompt,
-                "files_data": files_data
-            } if files_data else {
-                "role": "user",
-                "content": prompt
-            }
-            st.session_state.messages.append(user_message)
+            # Chat input
+            prompt = st.chat_input("Message")
             
-            try:
-                # Process through orchestrator
-                response = process_with_orchestrator(orchestrator, prompt, files_data)
+            # Check for suggestion click
+            if 'next_prompt' in st.session_state:
+                prompt = st.session_state.next_prompt
+                del st.session_state.next_prompt
+            
+            # Handle input
+            if prompt:
+                # Process uploaded files
+                files_data = []
+                if uploaded_files:
+                    for uploaded_file in uploaded_files:
+                        file_data = process_file_upload(uploaded_file)
+                        if file_data:
+                            files_data.append(file_data)
+                            st.toast(f"📎 {file_data['name']} attached")
                 
-                if response:
-                    # Add to history
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": response
-                    })
+                # Display user message
+                st.chat_message("user").write(prompt)
+                if files_data:
+                    for file_data in files_data:
+                        if file_data["type"] == "image":
+                            st.chat_message("user").image(file_data["display_data"])
+                        else:
+                            st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
+                
+                # Add to history
+                user_message = {
+                    "role": "user",
+                    "content": prompt,
+                    "files_data": files_data
+                } if files_data else {
+                    "role": "user",
+                    "content": prompt
+                }
+                st.session_state.messages.append(user_message)
+                
+                try:
+                    # Process through orchestrator
+                    response = process_with_orchestrator(orchestrator, prompt, files_data)
                     
-                    # Generate new suggestions
-                    st.session_state.suggestions = generate_suggestions(response)
-                    
-                    # Update file uploader key to clear files
-                    st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
-                    
-                    # Clear input
-                    st.rerun()
-                    
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-                if st.checkbox("Show detailed error"):
-                    st.error("Full error details:", exc_info=True)
+                    if response:
+                        # Add to history
+                        st.session_state.messages.append({
+                            "role": "assistant",
+                            "content": response
+                        })
+                        
+                        # Generate new suggestions
+                        st.session_state.suggestions = generate_suggestions(response)
+                        
+                        # Update file uploader key to clear files
+                        st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
+                        
+                        # Clear input
+                        st.rerun()
+                        
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+                    if st.checkbox("Show detailed error"):
+                        st.error("Full error details:", exc_info=True)
+
+    except OSError as e:
+        if "inotify watch limit reached" in str(e):
+            st.error("""
+            File watch limit reached. Please run these commands on your server:
+            ```bash
+            sudo sysctl -w fs.inotify.max_user_watches=524288
+            echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
+            sudo sysctl -p
+            ```
+            Then restart the Streamlit server.
+            """)
+        else:
+            raise e
 
 if __name__ == "__main__":
     # Load environment variables
