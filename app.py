@@ -158,12 +158,70 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
 
 /* Style file uploader */
 [data-testid="stFileUploader"] {
-    padding: 0.5rem !important;
-    margin-bottom: 0.5rem !important;
+    width: 100%;
+    margin-bottom: 1rem;
 }
 
-[data-testid="stFileUploader"] > div {
+[data-testid="stFileUploader"] > section {
     padding: 0.5rem !important;
+    border-radius: 8px;
+    background: var(--input-background);
+    border: 1px dashed var(--border-color);
+}
+
+[data-testid="stFileUploader"] > section:hover {
+    border-color: var(--accent-color);
+}
+
+[data-testid="stFileUploader"] [data-testid="stMarkdownContainer"] {
+    display: none;  /* Hide the default label */
+}
+
+/* File uploader drop zone */
+.uploadedFile {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem !important;
+    margin: 0.25rem 0;
+}
+
+/* File uploader button */
+[data-testid="stFileUploader"] button {
+    background: var(--accent-color) !important;
+    color: white !important;
+    border: none !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: 4px !important;
+}
+
+[data-testid="stFileUploader"] button:hover {
+    background: var(--hover-color) !important;
+}
+
+/* Custom file uploader label */
+.file-uploader-label {
+    font-size: 0.9rem;
+    color: var(--text-color);
+    opacity: 0.8;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Ensure proper spacing between elements */
+.stChatInput {
+    margin-top: 1rem !important;
+}
+
+/* Add custom file uploader label */
+.file-uploader-container::before {
+    content: "📎 Attach files";
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+    opacity: 0.8;
+    font-size: 0.9rem;
 }
 
 /* Ensure content doesn't get hidden */
@@ -867,15 +925,14 @@ def chat_interface():
         
         # Handle input at top
         with input_container:
-            # File uploader and chat input in columns
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                uploaded_files = st.file_uploader(
-                    "📎 Attach files",
-                    type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-                    accept_multiple_files=True,
-                    key=st.session_state.file_uploader_key
-                )
+            # File uploader with better layout
+            uploaded_files = st.file_uploader(
+                "📎 Attach files",
+                type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+                accept_multiple_files=True,
+                key=st.session_state.file_uploader_key,
+                label_visibility="collapsed"  # Hide the label since we show it in a cleaner way
+            )
             
             # Chat input
             prompt = st.chat_input("Message", key="chat_input")
@@ -922,22 +979,22 @@ def chat_interface():
                                 if file_data["type"] == "image":
                                     st.image(file_data["display_data"])
                                 elif file_data["type"] == "text":
-                                    with st.expander(f"📄 {file_data['name']}"):
+                                    with st.expander(f"📄 {file_data['name']}", expanded=False):
                                         st.text(file_data["data"])
                 else:  # assistant response
                     with st.container():
                         # Initial Analysis
-                        with st.expander("🎯 Initial Analysis", expanded=True):
+                        with st.expander("🎯 Initial Analysis", expanded=False):
                             st.markdown(st.session_state.specialist_responses.get('initial_analysis', ''))
                         
-                        # Domain Specialist Responses
+                        # Domain Specialist Responses (if any)
                         if 'current_domains' in st.session_state:
                             for domain in st.session_state.current_domains:
                                 with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
                                     st.markdown(st.session_state.specialist_responses.get(domain, ''))
                         
-                        # Final Synthesis
-                        with st.expander("📊 Final Synthesis", expanded=True):
+                        # Final Synthesis (always last)
+                        with st.expander("📊 Final Synthesis", expanded=False):
                             st.markdown(message["content"])
                             
                             # Display suggestions immediately after synthesis
