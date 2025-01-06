@@ -3,8 +3,14 @@ import streamlit as st
 # Configure page before any other Streamlit commands
 st.set_page_config(
     page_title="AI Assistant",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_icon="🤖",
+    layout="centered",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None
+    }
 )
 
 import os
@@ -79,81 +85,133 @@ except ImportError:
     ```
     """)
 
-# Update the CSS for proper width control
+# Core CSS for layout and theme
 st.markdown("""
 <style>
+/* Core theme variables */
+:root {
+    --background-color: #1a1a1a;
+    --input-background: #2d2d2d;
+    --text-color: #ffffff;
+    --border-color: #404040;
+    --accent-color: #4CAF50;
+    --hover-color: #45a049;
+}
+
 /* Main container width */
 .main .block-container {
-    max-width: 1000px !important;  /* Narrower max-width */
-    padding: 2rem 3rem !important;  /* Reduced padding */
-    margin: 0 auto !important;  /* Center content */
+    max-width: 1200px !important;
+    padding: 2rem 3rem !important;
+    margin: 0 auto !important;
 }
 
-/* Sidebar styling - allow resizing */
+/* Sidebar styling */
 [data-testid="stSidebar"] {
-    min-width: 300px !important;
-    max-width: 500px !important;
-    width: auto !important;
     background-color: var(--background-color);
+    padding: 2rem 1rem;
+    width: 21rem !important;
+}
+
+/* Chat message container */
+.stChatMessage {
+    background-color: var(--input-background);
+    border-radius: 10px;
     padding: 1rem;
+    margin: 0.5rem 0;
+    border: 1px solid var(--border-color);
 }
 
-[data-testid="stSidebar"] > div {
-    background-color: var(--background-color);
-    padding: 0 !important;
-}
-
-[data-testid="stSidebar"] .streamlit-expanderHeader {
+/* Expander styling */
+.streamlit-expanderHeader {
     background-color: var(--input-background) !important;
     border: 1px solid var(--border-color) !important;
     border-radius: 8px !important;
     padding: 1rem !important;
-    margin-bottom: 0.5rem !important;
-    transition: background-color 0.2s ease;
+    margin: 0.5rem 0 !important;
 }
 
-[data-testid="stSidebar"] .streamlit-expanderHeader:hover {
-    background-color: var(--hover-color) !important;
+.streamlit-expanderContent {
+    border: none !important;
+    padding: 1rem !important;
+    background-color: transparent !important;
 }
 
-/* Chat message container improvements */
-.stChatMessage {
-    max-width: 850px !important;  /* Limit message width */
-    margin: 1rem auto !important;  /* Center messages */
-    background: var(--input-background);
-    border-radius: 12px;
-    padding: 1rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-/* Analysis block styling */
-.analysis-block {
-    border-left: 3px solid var(--accent-color);
-    padding: 1rem;
-    margin: 1rem 0;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
-}
-
-/* Action buttons styling */
-.action-button {
-    background: transparent;
+/* Button styling */
+.stButton > button {
+    width: 100%;
     border: 1px solid var(--border-color);
-    color: var(--text-color);
     padding: 0.5rem 1rem;
-    border-radius: 4px;
-    cursor: pointer;
+    background-color: transparent;
+    color: var(--text-color);
+    border-radius: 6px;
     transition: all 0.2s ease;
-    margin: 0.25rem;
-    font-size: 0.9rem;
 }
 
-.action-button:hover {
-    background: var(--hover-color);
+.stButton > button:hover {
+    background-color: var(--hover-color);
     border-color: var(--accent-color);
 }
 
-/* Rest of your existing CSS... */
+/* Progress spinner */
+.processing-message {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background-color: var(--input-background);
+    border-radius: 8px;
+    margin: 0.5rem 0;
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: var(--text-color);
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Hide default Streamlit elements */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
+/* File uploader styling */
+[data-testid="stFileUploader"] {
+    padding: 1rem;
+    background-color: var(--input-background);
+    border-radius: 8px;
+    border: 1px dashed var(--border-color);
+}
+
+/* Chat input styling */
+.stChatInput {
+    margin-bottom: 0 !important;
+    padding: 0.5rem !important;
+}
+
+/* Download link styling */
+a.download-link {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background-color: var(--input-background);
+    color: var(--text-color);
+    text-decoration: none;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+    margin: 0.25rem 0;
+}
+
+a.download-link:hover {
+    background-color: var(--hover-color);
+    border-color: var(--accent-color);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -199,28 +257,42 @@ def convert_to_spreadsheet(content: str) -> Optional[bytes]:
     df.to_excel(buffer, index=False)
     return buffer.getvalue()
 
-def get_download_link(content: str, format: str) -> Optional[str]:
-    """Generate download link for content in specified format."""
-    try:
-        if format == "pdf" and OPTIONAL_FEATURES['pdf']:
-            pdf_content = convert_to_pdf(content)
-            if pdf_content:
-                b64 = base64.b64encode(pdf_content).decode()
-                return f'<a href="data:application/pdf;base64,{b64}" download="response.pdf">Download PDF</a>'
-        elif format == "markdown":
-            b64 = base64.b64encode(content.encode()).decode()
-            return f'<a href="data:text/markdown;base64,{b64}" download="response.md">Download Markdown</a>'
-        elif format == "txt":
-            b64 = base64.b64encode(content.encode()).decode()
-            return f'<a href="data:text/plain;base64,{b64}" download="response.txt">Download Text</a>'
-        elif format == "spreadsheet" and OPTIONAL_FEATURES['spreadsheet']:
-            spreadsheet_content = convert_to_spreadsheet(content)
-            if spreadsheet_content:
-                b64 = base64.b64encode(spreadsheet_content).decode()
-                return f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="response.xlsx">Download Spreadsheet</a>'
-    except Exception as e:
-        st.error(f"Error generating {format} download: {str(e)}")
-    return None
+def get_download_link(content: str, filename: str = "report.md") -> str:
+    """Generate a download link for content."""
+    b64 = base64.b64encode(content.encode()).decode()
+    return f"""
+        <a href="data:text/markdown;base64,{b64}" 
+           download="{filename}"
+           class="download-link">
+           💾 Download as Markdown
+        </a>
+    """
+
+def copy_to_clipboard(text: str):
+    """Copy text to clipboard using JavaScript."""
+    js = f"""
+        <script>
+        const copyText = {repr(text)};
+        const textArea = document.createElement("textarea");
+        textArea.value = copyText;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {{
+            document.execCommand('copy');
+            window.streamlitMessageListener.handleMessage({{
+                type: "streamlit:showToast",
+                data: {{ message: "Copied to clipboard!", kind: "info" }}
+            }});
+        }} catch (err) {{
+            window.streamlitMessageListener.handleMessage({{
+                type: "streamlit:showToast",
+                data: {{ message: "Failed to copy: " + err, kind: "error" }}
+            }});
+        }}
+        document.body.removeChild(textArea);
+        </script>
+    """
+    st.components.v1.html(js, height=0)
 
 def generate_suggestions(content: str) -> list:
     """Generate follow-up suggestions based on content."""
@@ -266,30 +338,6 @@ def generate_suggestions(content: str) -> list:
     except Exception as e:
         st.error(f"Error generating suggestions: {str(e)}")
         return []
-
-def copy_to_clipboard(text: str):
-    """Copy text to clipboard using JavaScript."""
-    # Create a JavaScript function to handle copying
-    js_code = f"""
-        <script>
-        async function copyToClipboard() {{
-            try {{
-                await navigator.clipboard.writeText({repr(text)});
-                window.streamlitMessageListener.handleMessage({{
-                    type: "streamlit:showToast",
-                    data: {{ message: "Copied to clipboard!", kind: "info" }}
-                }});
-            }} catch (err) {{
-                window.streamlitMessageListener.handleMessage({{
-                    type: "streamlit:showToast",
-                    data: {{ message: "Failed to copy to clipboard", kind: "error" }}
-                }});
-            }}
-        }}
-        copyToClipboard();
-        </script>
-    """
-    st.components.v1.html(js_code, height=0)
 
 def display_three_dot_menu(message: str):
     """Display three-dot menu with options."""
@@ -715,61 +763,70 @@ def chat_interface():
         orchestrator = get_orchestrator()
         
         # Create main container for chat
-        main_container = st.container()
+        chat_container = st.container()
         
-        with main_container:
-            # Input area at top
-            input_container = st.container()
-            with input_container:
-                uploaded_files = st.file_uploader(
-                    "📎 Attach files",
-                    type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-                    accept_multiple_files=True,
-                    key=st.session_state.file_uploader_key,
-                    label_visibility="collapsed"
-                )
-                prompt = st.chat_input("Message", key="chat_input")
-                st.markdown("---")
-            
-            # Display chat history
+        # Create a container for messages that will scroll
+        with chat_container:
             messages_container = st.container()
             with messages_container:
                 for message in st.session_state.messages:
                     display_message(message)
             
-            # Process new input
-            if prompt:
-                files_data = []
-                if uploaded_files:
-                    for uploaded_file in uploaded_files:
-                        file_data = process_file_upload(uploaded_file)
-                        if file_data:
-                            files_data.append(file_data)
-                            st.toast(f"📎 {file_data['name']} attached")
-                
-                # Add user message to history
-                st.session_state.messages.append({
-                    "role": "user",
-                    "content": prompt,
-                    "files_data": files_data if files_data else None
-                })
-                
-                try:
-                    # Process through orchestrator
-                    response = process_with_orchestrator(orchestrator, prompt, files_data if files_data else None)
-                    if response:
-                        st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-                    if st.checkbox("Show detailed error"):
-                        st.error("Full error details:", exc_info=True)
+            # Add some space before the input area
+            st.markdown("<div style='padding: 3rem'></div>", unsafe_allow_html=True)
             
-            # Handle suggestion clicks
-            if 'next_prompt' in st.session_state:
-                prompt = st.session_state.next_prompt
-                del st.session_state.next_prompt
-                st.rerun()
+            # Create a container for input that will stay at bottom
+            input_container = st.container()
+            with input_container:
+                # Add a separator line
+                st.markdown("<hr style='margin: 0; padding: 0'>", unsafe_allow_html=True)
                 
+                # Create columns for file upload and input
+                col1, col2 = st.columns([1, 4])
+                with col1:
+                    uploaded_files = st.file_uploader(
+                        "📎 Attach files",
+                        type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+                        accept_multiple_files=True,
+                        key=st.session_state.file_uploader_key,
+                        label_visibility="collapsed"
+                    )
+                with col2:
+                    prompt = st.chat_input("Message", key="chat_input")
+        
+        # Process new input
+        if prompt:
+            files_data = []
+            if uploaded_files:
+                for uploaded_file in uploaded_files:
+                    file_data = process_file_upload(uploaded_file)
+                    if file_data:
+                        files_data.append(file_data)
+                        st.toast(f"📎 {file_data['name']} attached")
+            
+            # Add user message to history
+            st.session_state.messages.append({
+                "role": "user",
+                "content": prompt,
+                "files_data": files_data if files_data else None
+            })
+            
+            try:
+                # Process through orchestrator
+                response = process_with_orchestrator(orchestrator, prompt, files_data if files_data else None)
+                if response:
+                    st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+                if st.checkbox("Show detailed error"):
+                    st.error("Full error details:", exc_info=True)
+        
+        # Handle suggestion clicks
+        if 'next_prompt' in st.session_state:
+            prompt = st.session_state.next_prompt
+            del st.session_state.next_prompt
+            st.rerun()
+            
     except Exception as e:
         st.error(f"Error in chat interface: {str(e)}")
         if st.checkbox("Show detailed error"):
@@ -816,23 +873,23 @@ def display_message(message: dict):
                 with st.expander("Final Synthesis", expanded=True):
                     st.markdown(message["content"])
                     st.markdown("---")
-                    col1, col2, col3 = st.columns([1, 1, 1])
+                    col1, col2 = st.columns([1, 1])
                     with col1:
                         if st.button("📋 Copy Synthesis", key=f"copy_synthesis_{hash(str(message))}"):
                             copy_to_clipboard(message["content"])
                     with col2:
-                        if st.button("💾 Download Report", key=f"download_synthesis_{hash(str(message))}"):
-                            # Generate full report content
-                            report_content = "# Analysis Report\n\n"
-                            for msg in st.session_state.messages:
-                                if msg.get("type") in ["initial_analysis", "specialist", "synthesis"]:
-                                    report_content += f"## {msg.get('type', '').replace('_', ' ').title()}\n\n"
-                                    report_content += msg["content"] + "\n\n"
-                            
-                            # Create download link
-                            b64 = base64.b64encode(report_content.encode()).decode()
-                            href = f'<a href="data:text/markdown;base64,{b64}" download="analysis_report.md">Click to download</a>'
-                            st.markdown(href, unsafe_allow_html=True)
+                        # Generate full report content
+                        report_content = "# Analysis Report\n\n"
+                        for msg in st.session_state.messages:
+                            if msg.get("type") in ["initial_analysis", "specialist", "synthesis"]:
+                                report_content += f"## {msg.get('type', '').replace('_', ' ').title()}\n\n"
+                                report_content += msg["content"] + "\n\n"
+                        
+                        # Create download link
+                        st.markdown(
+                            get_download_link(report_content, "analysis_report.md"),
+                            unsafe_allow_html=True
+                        )
             
             elif message.get("type") == "suggestions":
                 st.markdown("### 🤔 Explore Further")
