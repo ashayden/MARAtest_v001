@@ -482,15 +482,61 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         with st.chat_message("assistant"):
             response_placeholder = st.empty()
             full_response = ""
+            specialist_responses = []
             
-            # Stream the response through the orchestrator
-            for chunk in orchestrator.process_input(parts, stream=True):
+            # Get initial analysis
+            initial_response = ""
+            for chunk in orchestrator.agents['initializer'].generate_response(parts, stream=True):
                 if chunk:
-                    full_response += chunk
-                    response_placeholder.markdown(full_response + "▌")
+                    initial_response += chunk
+            
+            # Identify needed specialists
+            if isinstance(parts, list) and parts and 'text' in parts[0]:
+                domains = orchestrator.identify_required_specialists(parts[0]['text'])
+            else:
+                domains = []
+            
+            # Collect specialist responses
+            for domain in domains:
+                if domain not in orchestrator.agents:
+                    orchestrator.agents[domain] = orchestrator.create_specialist(domain)
+                
+                specialist_response = ""
+                for chunk in orchestrator.agents[domain].generate_response(
+                    parts,
+                    previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
+                    stream=True
+                ):
+                    specialist_response += chunk
+                
+                specialist_responses.append({
+                    'domain': domain,
+                    'response': specialist_response
+                })
+            
+            # Get final synthesis
+            synthesis = ""
+            for chunk in orchestrator.agents['reasoner'].generate_response(
+                parts,
+                previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
+                stream=True
+            ):
+                if chunk:
+                    synthesis += chunk
+                    response_placeholder.markdown(synthesis + "▌")
             
             # Final update without cursor
-            response_placeholder.markdown(full_response)
+            response_placeholder.markdown(synthesis)
+            
+            # Display specialist responses in expandable containers
+            if specialist_responses:
+                with st.expander("🔍 View Specialist Analysis", expanded=False):
+                    for specialist in specialist_responses:
+                        st.markdown(f"### {specialist['domain'].title()} Specialist")
+                        st.markdown(specialist['response'])
+                        st.divider()
+            
+            full_response = synthesis
         
         return full_response
         
@@ -528,7 +574,7 @@ def chat_interface():
                                 st.text(file_data["data"])
         
         # Display suggestions after the last message
-        if st.session_state.messages:
+        if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
             display_suggestions()
     
     # Fixed input container at bottom
