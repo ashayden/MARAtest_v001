@@ -492,24 +492,6 @@ def model_settings_sidebar():
                 step=256,
                 help="Maximum length of specialist responses"
             )
-            
-            # Add information about fixed agents
-            st.divider()
-            st.subheader("ℹ️ Other Agents")
-            with st.expander("View Fixed Agent Settings"):
-                st.markdown("""
-                **Initializer Agent** (Fixed Settings)
-                - Temperature: 0.5
-                - Top P: 0.9
-                - Top K: 40
-                - Max Length: 2048
-                
-                **Synthesis Agent** (Fixed Settings)
-                - Temperature: 0.3
-                - Top P: 0.8
-                - Top K: 30
-                - Max Length: 3072
-                """)
 
 def get_orchestrator():
     """Get or create the agent orchestrator."""
