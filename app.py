@@ -125,7 +125,7 @@ st.markdown("""
     max-width: none;
     background-color: #1a1a1a;
     padding: 1rem;
-    z-index: 999;
+    z-index: 1000;
     border-top: 1px solid #404040;
 }
 
