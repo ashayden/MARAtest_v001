@@ -141,7 +141,9 @@ def initialize_session_state():
         'temperature': 0.7,
         'top_p': 0.95,
         'top_k': 40,
-        'max_output_tokens': 2048
+        'max_output_tokens': 2048,
+        'specialist_responses': [],  # Store specialist responses
+        'current_analysis': None     # Store current analysis
     }
     
     for key, value in defaults.items():
@@ -495,55 +497,45 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         else:
             domains = []
         
-        # Create separate containers
-        specialist_container = st.container()
-        message_container = st.chat_message("assistant")
+        # Store current analysis in session state
+        st.session_state.current_analysis = {
+            'initial_response': initial_response,
+            'domains': domains
+        }
         
-        # Process specialist responses in their own container
+        # Process specialist responses
         if domains:
             progress_text.markdown("🔄 _Consulting domain specialists..._")
-            with specialist_container:
-                with st.expander("🔍 Domain Expert Analysis", expanded=False):
-                    for domain in domains:
-                        if domain not in orchestrator.agents:
-                            orchestrator.agents[domain] = orchestrator.create_specialist(domain)
-                        
-                        st.markdown(f"### {domain.title()} Analysis")
-                        specialist_placeholder = st.empty()
-                        
-                        specialist_response = ""
-                        for chunk in orchestrator.agents[domain].generate_response(
-                            parts,
-                            previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
-                            stream=True
-                        ):
-                            specialist_response += chunk
-                            specialist_placeholder.markdown(specialist_response + "▌")
-                        
-                        specialist_placeholder.markdown(specialist_response)
-                        specialist_responses.append({
-                            'domain': domain,
-                            'response': specialist_response
-                        })
-                        st.divider()
+            for domain in domains:
+                if domain not in orchestrator.agents:
+                    orchestrator.agents[domain] = orchestrator.create_specialist(domain)
+                
+                specialist_response = ""
+                for chunk in orchestrator.agents[domain].generate_response(
+                    parts,
+                    previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
+                    stream=True
+                ):
+                    specialist_response += chunk
+                
+                specialist_responses.append({
+                    'domain': domain,
+                    'response': specialist_response
+                })
+            
+            # Store specialist responses in session state
+            st.session_state.specialist_responses = specialist_responses
         
-        # Generate and display synthesis in chat message container
-        with message_container:
-            progress_text.markdown("🔄 _Synthesizing insights..._")
-            synthesis_placeholder = st.empty()
-            synthesis = ""
-            
-            for chunk in orchestrator.agents['reasoner'].generate_response(
-                parts,
-                previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
-                stream=True
-            ):
-                if chunk:
-                    synthesis += chunk
-                    synthesis_placeholder.markdown(synthesis + "▌")
-            
-            # Final update without cursor
-            synthesis_placeholder.markdown(synthesis)
+        # Generate synthesis
+        progress_text.markdown("🔄 _Synthesizing insights..._")
+        synthesis = ""
+        for chunk in orchestrator.agents['reasoner'].generate_response(
+            parts,
+            previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
+            stream=True
+        ):
+            if chunk:
+                synthesis += chunk
         
         # Clear progress indicator
         progress_text.empty()
@@ -569,9 +561,22 @@ def chat_interface():
     # Get orchestrator
     orchestrator = get_orchestrator()
     
-    # Container for chat history
-    with st.container():
-        # Chat history
+    # Create persistent containers
+    specialist_container = st.container()
+    chat_container = st.container()
+    input_container = st.container()
+    
+    # Display specialist analysis if available
+    with specialist_container:
+        if st.session_state.specialist_responses:
+            with st.expander("🔍 Domain Expert Analysis", expanded=False):
+                for response in st.session_state.specialist_responses:
+                    st.markdown(f"### {response['domain'].title()} Analysis")
+                    st.markdown(response['response'])
+                    st.divider()
+    
+    # Chat history
+    with chat_container:
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
@@ -588,7 +593,7 @@ def chat_interface():
             display_suggestions()
     
     # Fixed input container at bottom
-    with st.container():
+    with input_container:
         # File uploader (multiple files)
         uploaded_files = st.file_uploader(
             "📎 Attach files",
