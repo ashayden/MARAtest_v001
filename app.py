@@ -104,27 +104,46 @@ header {visibility: hidden;}
     display: flex;
     align-items: center;
     gap: 10px;
+    z-index: 1000;
 }
 
-/* File uploader styling */
+/* File uploader container */
 .file-upload-container {
     position: relative;
-    min-width: 40px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
+/* Style the actual file uploader */
 [data-testid="stFileUploader"] {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    cursor: pointer;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 40px !important;
+    height: 40px !important;
+    opacity: 0 !important;
+    cursor: pointer !important;
+    z-index: 2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
+/* Hide the default uploader label and container */
+[data-testid="stFileUploader"] > div {
+    display: none !important;
+}
+
+/* Paperclip icon */
 .file-upload-icon {
-    width: 32px;
-    height: 32px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -132,9 +151,11 @@ header {visibility: hidden;}
     opacity: 0.7;
     font-size: 18px;
     transition: opacity 0.2s;
+    z-index: 1;
+    pointer-events: none;
 }
 
-.file-upload-icon:hover {
+.file-upload-container:hover .file-upload-icon {
     opacity: 1;
 }
 
@@ -360,28 +381,24 @@ def chat_interface():
                     with st.expander("📄 View File Content"):
                         st.text(message["file_data"]["data"])
     
-    # Input container
-    st.markdown('<div class="input-container">', unsafe_allow_html=True)
+    # Create columns for input area
+    col1, col2 = st.columns([1, 15])
     
-    # File upload container with icon
-    st.markdown("""
-        <div class="file-upload-container">
-            <div class="file-upload-icon">📎</div>
-        </div>
-    """, unsafe_allow_html=True)
+    # File uploader in first column
+    with col1:
+        st.markdown('<div class="file-upload-container">', unsafe_allow_html=True)
+        st.markdown('<div class="file-upload-icon">📎</div>', unsafe_allow_html=True)
+        uploaded_file = st.file_uploader(
+            "",
+            type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+            label_visibility="collapsed",
+            key="file_uploader"
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
     
-    # File uploader
-    uploaded_file = st.file_uploader(
-        "",
-        type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-        label_visibility="collapsed",
-        key="file_uploader"
-    )
-    
-    # Chat input
-    prompt = st.chat_input("Message")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Chat input in second column
+    with col2:
+        prompt = st.chat_input("Message")
     
     # Handle input
     if prompt:
