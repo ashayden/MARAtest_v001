@@ -356,97 +356,81 @@ def chat_interface():
     """Main chat interface with file upload and input handling."""
     st.title("AI Assistant")
     
-    # Initialize session state
-    if 'messages' not in st.session_state:
+    # Initialize chat history
+    if "messages" not in st.session_state:
         st.session_state.messages = []
     
-    # Chat history display
-    for msg in st.session_state.messages:
-        with st.container():
-            if msg['role'] == 'user':
-                st.markdown(f"🧑 **You**: {msg['content']}")
-                if msg.get('file_data'):
-                    if msg['file_data']['type'] == 'image':
-                        st.image(msg['file_data']['display_data'], caption=msg['file_data']['name'])
-                    elif msg['file_data']['type'] == 'text':
-                        with st.expander(f"📄 {msg['file_data']['name']}"):
-                            st.text(msg['file_data']['data'])
-            else:
-                st.markdown(f"🤖 **Assistant**: {msg['content']}")
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+            if "file_data" in message:
+                if message["file_data"]["type"] == "image":
+                    st.image(message["file_data"]["display_data"])
+                elif message["file_data"]["type"] == "text":
+                    with st.expander("📄 View File Content"):
+                        st.text(message["file_data"]["data"])
     
-    # Input area
-    with st.container():
-        # File upload
-        uploaded_file = st.file_uploader(
-            "Upload a file (images, text, PDF)",
-            type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-            help="The model can process images, text files, and PDFs"
-        )
+    # File upload - Always visible above the chat input
+    uploaded_file = st.file_uploader(
+        "Upload a file (images, text, PDF)",
+        type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+        help="The model can process images, text files, and PDFs",
+        key="file_uploader"
+    )
+
+    # Process uploaded file immediately
+    file_data = None
+    if uploaded_file:
+        file_data = process_file_upload(uploaded_file)
+        if file_data:
+            st.success(f"File '{file_data['name']}' processed successfully!")
+    
+    # Chat input
+    if prompt := st.chat_input("Type your message here..."):
+        # Add user message to chat
+        st.chat_message("user").write(prompt)
+        if file_data:
+            st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
         
-        # Process uploaded file
-        file_data = None
-        if uploaded_file:
-            file_data = process_file_upload(uploaded_file)
-            if file_data:
-                st.success(f"File '{file_data['name']}' processed successfully!")
+        # Add to message history
+        user_message = {
+            "role": "user",
+            "content": prompt
+        }
+        if file_data:
+            user_message["file_data"] = file_data
+        st.session_state.messages.append(user_message)
         
-        # Text input and send button
-        col1, col2 = st.columns([0.85, 0.15])
-        with col1:
-            user_input = st.text_input(
-                "Your message",
-                key="user_input",
-                placeholder="Type your message here...",
-                label_visibility="collapsed"
-            )
-        with col2:
-            send_button = st.button("Send", use_container_width=True)
-        
-        # Handle input submission
-        if send_button or (user_input and len(user_input.strip()) > 0):
-            if not user_input and not file_data:
-                st.warning("Please enter a message or upload a file.")
-                return
-            
+        try:
             # Prepare messages for the model
-            parts = prepare_messages(user_input, file_data)
+            parts = prepare_messages(prompt, file_data)
             
-            # Add to chat history
+            # Generate response using Gemini
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            response = model.generate_content(
+                parts,
+                generation_config={
+                    'temperature': 0.7,
+                    'top_p': 0.95,
+                    'top_k': 40,
+                    'max_output_tokens': 2048,
+                }
+            )
+            
+            # Display assistant response
+            with st.chat_message("assistant"):
+                st.write(response.text)
+            
+            # Add to message history
             st.session_state.messages.append({
-                'role': 'user',
-                'content': user_input if user_input else "Uploaded file for analysis",
-                'file_data': file_data
+                "role": "assistant",
+                "content": response.text
             })
             
-            try:
-                # Use Gemini 2.0 Flash model for all requests
-                model = genai.GenerativeModel('gemini-2.0-flash-exp')
-                
-                # Generate response
-                response = model.generate_content(
-                    parts,  # Pass the parts directly
-                    generation_config={
-                        'temperature': 0.7,
-                        'top_p': 0.95,
-                        'top_k': 40,
-                        'max_output_tokens': 2048,
-                    }
-                )
-                
-                # Add response to chat history
-                st.session_state.messages.append({
-                    'role': 'assistant',
-                    'content': response.text
-                })
-                
-                # Clear input
-                st.session_state.user_input = ""
-                
-                # Rerun to update the display
-                st.rerun()
-                
-            except Exception as e:
-                st.error(f"Error generating response: {str(e)}")
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
+            if st.checkbox("Show detailed error"):
                 st.error("Full error details:", exc_info=True)
 
 if __name__ == "__main__":
