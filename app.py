@@ -404,29 +404,39 @@ def generate_suggestions(content: str) -> list:
 def display_suggestions():
     """Display suggestion buttons."""
     if st.session_state.suggestions:
-        st.write("Explore Further:")
+        st.markdown("---")  # Add separator
+        st.markdown("### 🤔 Explore Further")
         
-        # Create three columns with different widths for better layout
-        col1, col2, col3 = st.columns([1.2, 1.2, 1.2])
+        # Create three columns with equal width
+        cols = st.columns(3)
         
         # Define button styles for each type
         button_styles = [
-            "💡",  # For specific aspect
+            "💡",  # For deep dive
             "🔄",  # For related topics
             "🌟"   # For unexpected connections
         ]
         
-        # Display each suggestion in its own column with styled prefix
-        for idx, (col, (headline, full_question), style) in enumerate(zip(
-            [col1, col2, col3], 
-            st.session_state.suggestions, 
-            button_styles
+        # Display each suggestion in its own column
+        for idx, ((headline, full_question), style, col) in enumerate(zip(
+            st.session_state.suggestions,
+            button_styles,
+            cols
         )):
             with col:
-                if st.button(f"{style} {headline}", key=f"suggestion_{idx}"):
-                    # Use the full question when clicked
-                    st.session_state.next_prompt = full_question
-                    st.rerun()
+                # Create a container for the button
+                button_container = st.container()
+                with button_container:
+                    if st.button(
+                        f"{style} {headline}",
+                        key=f"suggestion_{idx}",
+                        help=full_question  # Show full question on hover
+                    ):
+                        st.session_state.next_prompt = full_question
+                        st.rerun()
+                    
+                    # Show truncated version of full question below button
+                    st.caption(full_question[:100] + "..." if len(full_question) > 100 else full_question)
 
 def copy_to_clipboard(text: str):
     """Copy text to clipboard."""
@@ -851,31 +861,27 @@ def chat_interface():
         # Get orchestrator
         orchestrator = get_orchestrator()
         
-        # Create main chat container
-        chat_container = st.container()
+        # Create containers in specific order
+        chat_container = st.container()  # For message history
+        input_container = st.container()  # For input at bottom
         
-        # Create fixed input container at bottom
-        with st.container():
-            st.markdown('<div class="input-container">', unsafe_allow_html=True)
-            
+        # Handle input first (but it will appear at bottom due to container order)
+        with input_container:
             # File uploader in a styled container
-            with st.container():
-                st.markdown('<div class="file-uploader-container">', unsafe_allow_html=True)
+            col1, col2 = st.columns([3, 1])
+            with col1:
                 uploaded_files = st.file_uploader(
                     "📎 Attach files",
                     type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
                     accept_multiple_files=True,
                     key=st.session_state.file_uploader_key
                 )
-                st.markdown('</div>', unsafe_allow_html=True)
             
             # Chat input
             prompt = st.chat_input("Message", key="chat_input")
-            st.markdown('</div>', unsafe_allow_html=True)
         
-        # Chat history in main container
+        # Display chat history
         with chat_container:
-            st.markdown('<div class="chat-message-container">', unsafe_allow_html=True)
             for message in st.session_state.messages:
                 with st.chat_message(message["role"]):
                     st.write(message["content"])
@@ -891,7 +897,6 @@ def chat_interface():
             # Display suggestions after the last message
             if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
                 display_suggestions()
-            st.markdown('</div>', unsafe_allow_html=True)
         
         # Check for suggestion click
         if 'next_prompt' in st.session_state:
@@ -927,11 +932,12 @@ def chat_interface():
                     # Display assistant response
                     with chat_container:
                         st.chat_message("assistant").write(response)
-                    
-                    # Generate new suggestions
-                    st.session_state.suggestions = generate_suggestions(response)
-                    with chat_container:
-                        display_suggestions()
+                        
+                        # Generate and display suggestions immediately after response
+                        suggestions = generate_suggestions(response)
+                        if suggestions:
+                            st.session_state.suggestions = suggestions
+                            display_suggestions()
                     
                     # Update file uploader key to clear files
                     st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
