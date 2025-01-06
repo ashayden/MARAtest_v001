@@ -105,11 +105,25 @@ st.markdown("""
     margin: 0 auto !important;
 }
 
-/* Sidebar styling */
+/* Sidebar styling - allow resizing */
 [data-testid="stSidebar"] {
     background-color: var(--background-color);
     padding: 2rem 1rem;
-    width: 21rem !important;
+    min-width: 21rem !important;
+    max-width: 35rem !important;
+}
+
+[data-testid="stSidebar"] > div {
+    background-color: var(--background-color);
+    padding: 0 !important;
+}
+
+[data-testid="stSidebar"] .streamlit-expanderHeader {
+    background-color: var(--input-background) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    padding: 1rem !important;
+    margin: 0.5rem 0 !important;
 }
 
 /* Chat message container */
@@ -272,27 +286,34 @@ def copy_to_clipboard(text: str):
     """Copy text to clipboard using JavaScript."""
     js = f"""
         <script>
-        const copyText = {repr(text)};
-        const textArea = document.createElement("textarea");
-        textArea.value = copyText;
-        document.body.appendChild(textArea);
-        textArea.select();
-        try {{
+        function copyToClipboard() {{
+            const el = document.createElement('textarea');
+            el.value = {repr(text)};
+            el.setAttribute('readonly', '');
+            el.style.position = 'absolute';
+            el.style.left = '-9999px';
+            document.body.appendChild(el);
+            const selected =
+                document.getSelection().rangeCount > 0
+                    ? document.getSelection().getRangeAt(0)
+                    : false;
+            el.select();
             document.execCommand('copy');
-            window.streamlitMessageListener.handleMessage({{
-                type: "streamlit:showToast",
-                data: {{ message: "Copied to clipboard!", kind: "info" }}
-            }});
-        }} catch (err) {{
-            window.streamlitMessageListener.handleMessage({{
-                type: "streamlit:showToast",
-                data: {{ message: "Failed to copy: " + err, kind: "error" }}
-            }});
+            document.body.removeChild(el);
+            if (selected) {{
+                document.getSelection().removeAllRanges();
+                document.getSelection().addRange(selected);
+            }}
+            window.parent.postMessage({{
+                type: 'streamlit:showToast',
+                data: {{ message: 'Copied to clipboard!', kind: 'info' }}
+            }}, '*');
         }}
-        document.body.removeChild(textArea);
+        copyToClipboard();
         </script>
     """
-    st.components.v1.html(js, height=0)
+    components = st.components.v1.html(js, height=0)
+    return components
 
 def generate_suggestions(content: str) -> list:
     """Generate follow-up suggestions based on content."""
@@ -855,19 +876,15 @@ def display_message(message: dict):
                 with st.expander("Initial Analysis", expanded=False):
                     st.markdown(message["content"])
                     st.markdown("---")
-                    col1, col2 = st.columns([1, 1])
-                    with col1:
-                        if st.button("📋 Copy Analysis", key=f"copy_initial_{hash(str(message))}"):
-                            copy_to_clipboard(message["content"])
+                    if st.button("📋 Copy Analysis", key=f"copy_initial_{hash(str(message))}"):
+                        copy_to_clipboard(message["content"])
             
             elif message.get("type") == "specialist":
                 with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
                     st.markdown(message["content"])
                     st.markdown("---")
-                    col1, col2 = st.columns([1, 1])
-                    with col1:
-                        if st.button("📋 Copy Analysis", key=f"copy_specialist_{hash(str(message))}"):
-                            copy_to_clipboard(message["content"])
+                    if st.button("📋 Copy Analysis", key=f"copy_specialist_{hash(str(message))}"):
+                        copy_to_clipboard(message["content"])
             
             elif message.get("type") == "synthesis":
                 with st.expander("Final Synthesis", expanded=True):
@@ -902,7 +919,7 @@ def display_message(message: dict):
                             use_container_width=True
                         ):
                             st.session_state.next_prompt = full_question
-                            st.rerun()
+                            st.experimental_rerun()
             else:
                 st.markdown(content)
 
