@@ -674,8 +674,13 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                         with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
                             response_text = st.empty()
                     
+                    # Construct previous responses list with proper resolution
                     previous_responses = [initial_response]
-                    previous_responses.extend(st.session_state.specialist_responses.get(d, "") for d in domains if d != domain)
+                    for d in domains:
+                        if d != domain:  # Skip current domain
+                            response = st.session_state.specialist_responses.get(d)
+                            if response:  # Only add non-None responses
+                                previous_responses.append(response)
                     
                     for chunk in orchestrator.agents[domain].generate_response(
                         parts,

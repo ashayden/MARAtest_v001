@@ -191,17 +191,20 @@ class AgentOrchestrator:
                 # Mark start of specialist response
                 yield f"\n### SPECIALIST: {domain}\n"
                 
+                # Prepare previous responses for this specialist
+                current_previous_responses = previous_responses.copy()  # Create a copy to avoid modifying the original
+                
                 specialist_response = ""
                 for chunk in self.agents[domain].generate_response(
                     normalized_input,
-                    previous_responses=previous_responses,  # Pass accumulated responses
+                    previous_responses=current_previous_responses,
                     stream=True
                 ):
                     specialist_response += chunk
                     if stream:
                         yield chunk
                 
-                # Store in dictionary
+                # Store in dictionary and add to previous responses
                 specialist_responses[domain] = specialist_response
                 previous_responses.append(specialist_response)
             
