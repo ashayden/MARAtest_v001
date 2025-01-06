@@ -195,11 +195,13 @@ def get_download_link(content: str, format: str) -> Optional[str]:
 def generate_suggestions(content: str) -> list:
     """Generate follow-up suggestions based on content."""
     prompt = f"""
-    Based on this content, generate 4 follow-up questions or prompts in these categories:
-    1. Dig deeper into a specific aspect
-    2. Explore related topics
-    3. Continue the current discussion
-    4. Make an unexpected connection
+    Based on the following content, generate exactly 3 follow-up questions that are:
+    1. A deeper dive into the most interesting specific aspect of the topic
+    2. An extension of the topic into related areas or broader implications
+    3. An unexpected or unique connection to another field or concept
+    
+    Make each question thoughtful, specific, and directly related to the content.
+    Format each question as a complete, natural question without category labels or prefixes.
     
     Content: {content}
     """
@@ -215,8 +217,14 @@ def generate_suggestions(content: str) -> list:
                 'max_output_tokens': 1024,
             }
         )
-        suggestions = [s.strip() for s in response.text.split('\n') if s.strip() and not s.strip().startswith(('1.', '2.', '3.', '4.'))]
-        return suggestions[:4]
+        # Clean and format suggestions
+        suggestions = []
+        for line in response.text.split('\n'):
+            line = line.strip()
+            # Skip empty lines and lines that start with numbers or category labels
+            if line and not line.startswith(('1.', '2.', '3.', 'A deeper', 'An extension', 'An unexpected')):
+                suggestions.append(line)
+        return suggestions[:3]  # Ensure we only return 3 suggestions
     except Exception as e:
         st.error(f"Error generating suggestions: {str(e)}")
         return []
@@ -224,12 +232,24 @@ def generate_suggestions(content: str) -> list:
 def display_suggestions():
     """Display suggestion buttons."""
     if st.session_state.suggestions:
-        st.write("Follow-up Questions:")
-        cols = st.columns(2)
-        for idx, suggestion in enumerate(st.session_state.suggestions):
-            with cols[idx % 2]:
-                if st.button(suggestion, key=f"suggestion_{idx}"):
-                    # When clicked, use this as the next prompt
+        st.write("Explore Further:")
+        
+        # Create three columns with different widths for better layout
+        col1, col2, col3 = st.columns([1.2, 1.2, 1.2])
+        
+        # Define button styles for each type
+        button_styles = [
+            "💡 Dig Deeper: ",  # For specific aspect
+            "🔄 Extend: ",      # For related topics
+            "🌟 Connect: "      # For unexpected connections
+        ]
+        
+        # Display each suggestion in its own column with styled prefix
+        for idx, (col, suggestion, style) in enumerate(zip([col1, col2, col3], 
+                                                         st.session_state.suggestions, 
+                                                         button_styles)):
+            with col:
+                if st.button(f"{style}{suggestion}", key=f"suggestion_{idx}"):
                     st.session_state.next_prompt = suggestion
                     st.rerun()
 
