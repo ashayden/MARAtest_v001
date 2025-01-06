@@ -425,6 +425,41 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
 [data-testid="stExpander"] + div {
     margin-top: 1rem;
 }
+
+/* Increase main container width */
+.main .block-container {
+    max-width: 1200px !important;  /* Increased from 1000px */
+    padding-bottom: 200px !important;
+}
+
+/* Menu button styling */
+.menu-button {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: color 0.2s ease;
+    float: right;
+}
+
+.menu-button:hover {
+    color: rgba(255, 255, 255, 1);
+}
+
+/* Menu container styling */
+.menu-container {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 1000;
+}
+
+/* Response container positioning */
+.response-container {
+    position: relative;
+    padding-right: 2.5rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -712,6 +747,14 @@ def how_it_works_sidebar():
     with st.sidebar:
         with st.expander("ℹ️ How it Works", expanded=False):
             st.markdown("""
+            This AI Assistant is unique in its ability to dynamically create specialist agents based on your query's topic. Unlike traditional chatbots that use a one-size-fits-all approach, this system:
+
+            - Creates domain experts in real-time based on your specific topic
+            - Combines insights from multiple specialists for comprehensive answers
+            - Allows fine-tuning of specialist behavior through model controls
+            
+            ---
+            
             ### Multi-Agent Response Architecture
             
             #### Core Components
@@ -1068,9 +1111,8 @@ def chat_interface():
                                 with st.expander("Initial Analysis", expanded=False):
                                     st.markdown(message["content"])
                             with col2:
-                                with st.expander("⋮", expanded=False):
-                                    if st.button("Copy", key=f"copy_initial_{hash(str(message))}"):
-                                        copy_to_clipboard(message["content"])
+                                if st.button("⋮", key=f"menu_initial_{hash(str(message))}", help="Copy content"):
+                                    copy_to_clipboard(message["content"])
                         
                         elif message["type"] == "specialist":
                             col1, col2 = st.columns([20, 1])
@@ -1078,9 +1120,8 @@ def chat_interface():
                                 with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
                                     st.markdown(message["content"])
                             with col2:
-                                with st.expander("⋮", expanded=False):
-                                    if st.button("Copy", key=f"copy_specialist_{hash(str(message))}"):
-                                        copy_to_clipboard(message["content"])
+                                if st.button("⋮", key=f"menu_specialist_{hash(str(message))}", help="Copy content"):
+                                    copy_to_clipboard(message["content"])
                         
                         elif message["type"] == "synthesis":
                             col1, col2 = st.columns([20, 1])
@@ -1088,17 +1129,14 @@ def chat_interface():
                                 with st.expander("Final Synthesis", expanded=True):
                                     st.markdown(message["content"])
                             with col2:
-                                with st.expander("⋮", expanded=False):
-                                    if st.button("Copy", key=f"copy_synthesis_{hash(str(message))}"):
-                                        copy_to_clipboard(message["content"])
+                                if st.button("⋮", key=f"menu_synthesis_{hash(str(message))}", help="Copy content"):
+                                    copy_to_clipboard(message["content"])
                         
                         elif message["type"] == "suggestions":
-                            # Add some spacing after synthesis
-                            st.markdown("")
+                            st.markdown("")  # Add spacing
                             col1, col2 = st.columns([20, 1])
                             with col1:
                                 with st.expander("Explore Further", expanded=True):
-                                    # Display each suggestion as a vertical button
                                     for idx, (headline, full_question) in enumerate(message["suggestions"]):
                                         if st.button(
                                             headline,
@@ -1109,10 +1147,9 @@ def chat_interface():
                                             st.session_state.next_prompt = full_question
                                             st.rerun()
                             with col2:
-                                with st.expander("⋮", expanded=False):
-                                    if st.button("Copy All", key=f"copy_suggestions_{hash(str(message))}"):
-                                        suggestions_text = "\n\n".join([f"{h}\n{q}" for h, q in message["suggestions"]])
-                                        copy_to_clipboard(suggestions_text)
+                                if st.button("⋮", key=f"menu_suggestions_{hash(str(message))}", help="Copy all suggestions"):
+                                    suggestions_text = "\n\n".join([f"{h}\n{q}" for h, q in message["suggestions"]])
+                                    copy_to_clipboard(suggestions_text)
         
         # Handle suggestion clicks
         if 'next_prompt' in st.session_state:
