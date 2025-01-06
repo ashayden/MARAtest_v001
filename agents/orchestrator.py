@@ -104,7 +104,8 @@ class AgentOrchestrator:
     def process_input(self, user_input: list, stream: bool = True) -> Generator[str, None, None]:
         """Process input through the collaborative agent system."""
         try:
-            # Get initial analysis
+            # Start initial analysis
+            yield "### INITIAL_ANALYSIS:\n"
             initial_response = ""
             for chunk in self.agents['initializer'].generate_response(user_input, stream=True):
                 initial_response += chunk
@@ -123,6 +124,9 @@ class AgentOrchestrator:
                 if domain not in self.agents:
                     self.agents[domain] = self.create_specialist(domain)
                 
+                # Mark start of specialist response
+                yield f"\n### SPECIALIST: {domain}\n"
+                
                 specialist_response = ""
                 for chunk in self.agents[domain].generate_response(
                     user_input,
@@ -134,7 +138,8 @@ class AgentOrchestrator:
                         yield chunk
                 specialist_responses.append(specialist_response)
             
-            # Synthesize final response
+            # Start final synthesis
+            yield "\n### FINAL_SYNTHESIS:\n"
             for chunk in self.agents['reasoner'].generate_response(
                 user_input,
                 previous_responses=[initial_response] + specialist_responses,

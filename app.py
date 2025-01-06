@@ -80,12 +80,35 @@ st.markdown("""
     --input-background: #2d2d2d;
     --text-color: #ffffff;
     --border-color: #404040;
+    --accent-color: #4CAF50;
+    --hover-color: #45a049;
 }
 
 /* Hide Streamlit components */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
+
+/* Expander styling */
+.streamlit-expanderHeader {
+    background-color: var(--input-background) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    padding: 1rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+.streamlit-expanderHeader:hover {
+    background-color: #363636 !important;
+}
+
+.streamlit-expanderContent {
+    background-color: var(--background-color) !important;
+    border: 1px solid var(--border-color) !important;
+    border-top: none !important;
+    border-radius: 0 0 8px 8px !important;
+    padding: 1rem !important;
+}
 
 /* Chat messages */
 .stChatMessage {
@@ -134,6 +157,22 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
 /* Ensure content doesn't get hidden */
 .main .block-container {
     padding-bottom: 160px;
+}
+
+/* Specialist container styling */
+.specialist-container {
+    margin: 1rem 0;
+    border-left: 3px solid var(--accent-color);
+    padding-left: 1rem;
+}
+
+/* Analysis sections */
+.initial-analysis {
+    border-left-color: #2196F3;
+}
+
+.final-synthesis {
+    border-left-color: #9C27B0;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -688,6 +727,110 @@ def chat_interface():
             """)
         else:
             raise e
+
+def create_specialist_container(specialist_name: str, response: str):
+    """Create a collapsible container for specialist responses."""
+    with st.expander(f"🔍 {specialist_name.replace('specialist_', '').title()} Specialist Analysis"):
+        st.markdown(response)
+
+def display_message(message: dict):
+    """Display a chat message with appropriate styling."""
+    role = message.get('role', 'user')
+    content = message.get('content', '')
+    
+    if role == 'user':
+        st.markdown(f"**You:** {content}")
+    elif role == 'assistant':
+        if 'specialist_responses' in message:
+            st.markdown("**AI Assistant Analysis:**")
+            # Display initial analysis
+            if 'initial_analysis' in message:
+                with st.expander("🎯 Initial Analysis", expanded=True):
+                    st.markdown(message['initial_analysis'])
+            
+            # Display specialist responses in collapsible containers
+            for specialist, response in message['specialist_responses'].items():
+                create_specialist_container(specialist, response)
+            
+            # Display final synthesis
+            if 'final_synthesis' in message:
+                with st.expander("📊 Final Synthesis", expanded=True):
+                    st.markdown(message['final_synthesis'])
+        else:
+            st.markdown(f"**AI Assistant:** {content}")
+
+def process_agent_response(user_input: str):
+    """Process user input through the agent system and display responses."""
+    try:
+        # Initialize response structure
+        current_response = {
+            'role': 'assistant',
+            'specialist_responses': {},
+            'initial_analysis': '',
+            'final_synthesis': ''
+        }
+        
+        # Process through orchestrator
+        response_stream = agent_orchestrator.process_input([{'text': user_input}])
+        
+        # Create placeholder for streaming responses
+        response_placeholder = st.empty()
+        
+        # Track current specialist
+        current_specialist = None
+        current_content = ""
+        
+        for chunk in response_stream:
+            if '### SPECIALIST:' in chunk:
+                # Save previous specialist content if any
+                if current_specialist and current_content:
+                    current_response['specialist_responses'][current_specialist] = current_content
+                
+                # Extract new specialist name
+                current_specialist = chunk.split('### SPECIALIST:')[1].strip()
+                current_content = ""
+            elif '### INITIAL_ANALYSIS:' in chunk:
+                current_specialist = 'initial_analysis'
+                current_content = ""
+            elif '### FINAL_SYNTHESIS:' in chunk:
+                # Save previous content
+                if current_specialist and current_content:
+                    current_response['specialist_responses'][current_specialist] = current_content
+                current_specialist = 'final_synthesis'
+                current_content = ""
+            else:
+                current_content += chunk
+                
+                # Update display
+                if current_specialist == 'initial_analysis':
+                    current_response['initial_analysis'] = current_content
+                elif current_specialist == 'final_synthesis':
+                    current_response['final_synthesis'] = current_content
+                elif current_specialist:
+                    current_response['specialist_responses'][current_specialist] = current_content
+                
+                # Update display
+                with response_placeholder.container():
+                    display_message(current_response)
+        
+        # Save final content
+        if current_specialist and current_content:
+            if current_specialist == 'initial_analysis':
+                current_response['initial_analysis'] = current_content
+            elif current_specialist == 'final_synthesis':
+                current_response['final_synthesis'] = current_content
+            else:
+                current_response['specialist_responses'][current_specialist] = current_content
+        
+        # Add to session state
+        st.session_state.messages.append({
+            'role': 'user',
+            'content': user_input
+        })
+        st.session_state.messages.append(current_response)
+        
+    except Exception as e:
+        st.error(f"Error processing response: {str(e)}")
 
 if __name__ == "__main__":
     # Load environment variables
