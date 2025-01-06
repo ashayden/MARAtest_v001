@@ -477,35 +477,32 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
     try:
         # Prepare messages
         parts = prepare_messages(prompt, files_data)
+        specialist_responses = []
         
-        # Create message container
+        # Progress indicator
+        progress_text = st.empty()
+        progress_text.markdown("🔄 _Analyzing input and identifying required expertise..._")
+        
+        # Get initial analysis silently
+        initial_response = ""
+        for chunk in orchestrator.agents['initializer'].generate_response(parts, stream=True):
+            if chunk:
+                initial_response += chunk
+        
+        # Identify needed specialists
+        if isinstance(parts, list) and parts and 'text' in parts[0]:
+            domains = orchestrator.identify_required_specialists(parts[0]['text'])
+        else:
+            domains = []
+        
+        # Create separate containers
+        specialist_container = st.container()
         message_container = st.chat_message("assistant")
         
-        with message_container:
-            specialist_responses = []
-            
-            # Progress indicator for initial analysis
-            progress_text = st.empty()
-            progress_text.markdown("🔄 _Analyzing input and identifying required expertise..._")
-            
-            # Get initial analysis silently
-            initial_response = ""
-            for chunk in orchestrator.agents['initializer'].generate_response(parts, stream=True):
-                if chunk:
-                    initial_response += chunk
-            
-            # Identify needed specialists
-            if isinstance(parts, list) and parts and 'text' in parts[0]:
-                domains = orchestrator.identify_required_specialists(parts[0]['text'])
-            else:
-                domains = []
-            
-            # Process specialist responses
-            if domains:
-                # Update progress indicator
-                progress_text.markdown("🔄 _Consulting domain specialists..._")
-                
-                # Create container for specialist responses
+        # Process specialist responses in their own container
+        if domains:
+            progress_text.markdown("🔄 _Consulting domain specialists..._")
+            with specialist_container:
                 with st.expander("🔍 Domain Expert Analysis", expanded=False):
                     for domain in domains:
                         if domain not in orchestrator.agents:
@@ -529,33 +526,29 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                             'response': specialist_response
                         })
                         st.divider()
-            
-            # Update progress indicator for synthesis
+        
+        # Generate and display synthesis in chat message container
+        with message_container:
             progress_text.markdown("🔄 _Synthesizing insights..._")
+            synthesis_placeholder = st.empty()
+            synthesis = ""
             
-            # Create container for synthesis
-            synthesis_container = st.container()
-            with synthesis_container:
-                synthesis_placeholder = st.empty()
-                synthesis = ""
-                
-                # Generate and display synthesis
-                for chunk in orchestrator.agents['reasoner'].generate_response(
-                    parts,
-                    previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
-                    stream=True
-                ):
-                    if chunk:
-                        synthesis += chunk
-                        synthesis_placeholder.markdown(synthesis + "▌")
-                
-                # Final update without cursor
-                synthesis_placeholder.markdown(synthesis)
+            for chunk in orchestrator.agents['reasoner'].generate_response(
+                parts,
+                previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
+                stream=True
+            ):
+                if chunk:
+                    synthesis += chunk
+                    synthesis_placeholder.markdown(synthesis + "▌")
             
-            # Clear progress indicator
-            progress_text.empty()
-            
-            return synthesis
+            # Final update without cursor
+            synthesis_placeholder.markdown(synthesis)
+        
+        # Clear progress indicator
+        progress_text.empty()
+        
+        return synthesis
         
     except Exception as e:
         st.error(f"Orchestrator error: {str(e)}")
