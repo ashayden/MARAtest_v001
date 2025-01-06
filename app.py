@@ -478,12 +478,17 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         # Prepare messages
         parts = prepare_messages(prompt, files_data)
         
-        # Get orchestrated response
-        with st.chat_message("assistant"):
-            specialist_container = st.container()
-            synthesis_container = st.container()
+        # Create message container
+        message_container = st.chat_message("assistant")
+        
+        with message_container:
+            specialist_responses = []
             
-            # Get initial analysis
+            # Progress indicator for initial analysis
+            progress_text = st.empty()
+            progress_text.markdown("🔄 _Analyzing input and identifying required expertise..._")
+            
+            # Get initial analysis silently
             initial_response = ""
             for chunk in orchestrator.agents['initializer'].generate_response(parts, stream=True):
                 if chunk:
@@ -496,40 +501,45 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 domains = []
             
             # Process specialist responses
-            specialist_responses = []
-            
-            # Display specialist responses in expandable container first
             if domains:
-                with specialist_container:
-                    with st.expander("🔍 Detailed Analysis by Domain Experts", expanded=False):
-                        for domain in domains:
-                            if domain not in orchestrator.agents:
-                                orchestrator.agents[domain] = orchestrator.create_specialist(domain)
-                            
-                            st.markdown(f"### {domain.title()} Analysis")
-                            specialist_placeholder = st.empty()
-                            
-                            specialist_response = ""
-                            for chunk in orchestrator.agents[domain].generate_response(
-                                parts,
-                                previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
-                                stream=True
-                            ):
-                                specialist_response += chunk
-                                specialist_placeholder.markdown(specialist_response + "▌")
-                            
-                            specialist_placeholder.markdown(specialist_response)
-                            specialist_responses.append({
-                                'domain': domain,
-                                'response': specialist_response
-                            })
-                            st.divider()
+                # Update progress indicator
+                progress_text.markdown("🔄 _Consulting domain specialists..._")
+                
+                # Create container for specialist responses
+                with st.expander("🔍 Domain Expert Analysis", expanded=False):
+                    for domain in domains:
+                        if domain not in orchestrator.agents:
+                            orchestrator.agents[domain] = orchestrator.create_specialist(domain)
+                        
+                        st.markdown(f"### {domain.title()} Analysis")
+                        specialist_placeholder = st.empty()
+                        
+                        specialist_response = ""
+                        for chunk in orchestrator.agents[domain].generate_response(
+                            parts,
+                            previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
+                            stream=True
+                        ):
+                            specialist_response += chunk
+                            specialist_placeholder.markdown(specialist_response + "▌")
+                        
+                        specialist_placeholder.markdown(specialist_response)
+                        specialist_responses.append({
+                            'domain': domain,
+                            'response': specialist_response
+                        })
+                        st.divider()
             
-            # Display final synthesis in separate container
+            # Update progress indicator for synthesis
+            progress_text.markdown("🔄 _Synthesizing insights..._")
+            
+            # Create container for synthesis
+            synthesis_container = st.container()
             with synthesis_container:
                 synthesis_placeholder = st.empty()
                 synthesis = ""
                 
+                # Generate and display synthesis
                 for chunk in orchestrator.agents['reasoner'].generate_response(
                     parts,
                     previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
@@ -542,9 +552,10 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 # Final update without cursor
                 synthesis_placeholder.markdown(synthesis)
             
-            full_response = synthesis
-        
-        return full_response
+            # Clear progress indicator
+            progress_text.empty()
+            
+            return synthesis
         
     except Exception as e:
         st.error(f"Orchestrator error: {str(e)}")
