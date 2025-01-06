@@ -446,88 +446,70 @@ def prepare_messages(text_input: str, files_data: list = None) -> list:
 def model_settings_sidebar():
     """Sidebar for model settings."""
     with st.sidebar:
-        st.title("Model Settings")
-        st.caption("These settings control the behavior of domain specialist agents only.")
-        
-        st.divider()
-        
-        st.subheader("🔬 Domain Specialist Settings")
-        st.info("""
-        Adjust these settings to control how domain specialists analyze and respond to queries.
-        Other agents (Initializer and Synthesizer) use fixed settings for consistency.
-        """)
-        
-        # Temperature slider
-        st.session_state.temperature = st.slider(
-            "Creativity Level",
-            min_value=0.0,
-            max_value=1.0,
-            value=st.session_state.temperature,
-            step=0.1,
-            help="Higher values make specialist responses more creative but less focused"
-        )
-        
-        # Top P slider
-        st.session_state.top_p = st.slider(
-            "Response Diversity",
-            min_value=0.0,
-            max_value=1.0,
-            value=st.session_state.top_p,
-            step=0.05,
-            help="Controls how diverse specialist responses can be"
-        )
-        
-        # Top K slider
-        st.session_state.top_k = st.slider(
-            "Choice Range",
-            min_value=1,
-            max_value=100,
-            value=st.session_state.top_k,
-            step=1,
-            help="Controls how many options specialists consider for each word"
-        )
-        
-        # Max Output Tokens slider
-        st.session_state.max_output_tokens = st.slider(
-            "Maximum Response Length",
-            min_value=256,
-            max_value=4096,
-            value=st.session_state.max_output_tokens,
-            step=256,
-            help="Maximum length of specialist responses"
-        )
-        
-        # Add a divider
-        st.divider()
-        
-        # Display current settings
-        st.write("Current Specialist Settings:")
-        settings = {
-            "Creativity": f"{st.session_state.temperature:.1f}",
-            "Diversity": f"{st.session_state.top_p:.2f}",
-            "Choice Range": st.session_state.top_k,
-            "Max Length": st.session_state.max_output_tokens
-        }
-        for key, value in settings.items():
-            st.text(f"{key}: {value}")
-        
-        # Add information about fixed agents
-        st.divider()
-        st.subheader("ℹ️ Other Agents")
-        with st.expander("View Fixed Agent Settings"):
-            st.markdown("""
-            **Initializer Agent** (Fixed Settings)
-            - Temperature: 0.5
-            - Top P: 0.9
-            - Top K: 40
-            - Max Length: 2048
-            
-            **Synthesis Agent** (Fixed Settings)
-            - Temperature: 0.3
-            - Top P: 0.8
-            - Top K: 30
-            - Max Length: 3072
+        with st.expander("⚙️ Model Settings", expanded=True):
+            st.subheader("🔬 Domain Specialist Settings")
+            st.info("""
+            Adjust these settings to control how domain specialists analyze and respond to queries.
+            Other agents (Initializer and Synthesizer) use fixed settings for consistency.
             """)
+            
+            # Temperature slider
+            st.session_state.temperature = st.slider(
+                "Creativity Level",
+                min_value=0.0,
+                max_value=1.0,
+                value=st.session_state.temperature,
+                step=0.1,
+                help="Higher values make specialist responses more creative but less focused"
+            )
+            
+            # Top P slider
+            st.session_state.top_p = st.slider(
+                "Response Diversity",
+                min_value=0.0,
+                max_value=1.0,
+                value=st.session_state.top_p,
+                step=0.05,
+                help="Controls how diverse specialist responses can be"
+            )
+            
+            # Top K slider
+            st.session_state.top_k = st.slider(
+                "Choice Range",
+                min_value=1,
+                max_value=100,
+                value=st.session_state.top_k,
+                step=1,
+                help="Controls how many options specialists consider for each word"
+            )
+            
+            # Max Output Tokens slider
+            st.session_state.max_output_tokens = st.slider(
+                "Maximum Response Length",
+                min_value=256,
+                max_value=4096,
+                value=st.session_state.max_output_tokens,
+                step=256,
+                help="Maximum length of specialist responses"
+            )
+            
+            # Add information about fixed agents
+            st.divider()
+            st.subheader("ℹ️ Other Agents")
+            with st.expander("View Fixed Agent Settings"):
+                st.markdown("""
+                **Initializer Agent** (Fixed Settings)
+                - Temperature: 0.5
+                - Top P: 0.9
+                - Top K: 40
+                - Max Length: 2048
+                
+                **Synthesis Agent** (Fixed Settings)
+                - Temperature: 0.3
+                - Top P: 0.8
+                - Top K: 30
+                - Max Length: 3072
+                """)
 
 def get_orchestrator():
     """Get or create the agent orchestrator."""
