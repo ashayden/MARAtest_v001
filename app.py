@@ -96,45 +96,49 @@ header {visibility: hidden;}
     z-index: 1000;
 }
 
-/* Chat input wrapper */
-.stChatInput {
-    padding: 0 !important;
-    background: transparent !important;
-}
-
 /* Chat input field */
-.stChatInput input {
+.stChatInput > div {
+    background: var(--input-background) !important;
     border-radius: 20px !important;
     border: 1px solid var(--border-color) !important;
-    background: var(--input-background) !important;
-    color: var(--text-color) !important;
-    padding: 12px 50px 12px 45px !important;  /* Space for icons */
-    height: 45px !important;
-    margin: 0 !important;
+    padding: 0 !important;
 }
 
-/* File upload button */
-.file-upload-btn {
+.stChatInput input {
+    color: var(--text-color) !important;
+    padding: 12px 50px 12px 45px !important;
+    height: 45px !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+/* File upload container */
+.file-upload-container {
     position: absolute;
     left: 15px;
     bottom: 22px;
     z-index: 1001;
-    background: transparent;
-    border: none;
+}
+
+/* Hide default file uploader */
+.file-upload-container > div > div:first-child {
+    display: none;
+}
+
+/* Custom file upload button */
+.file-upload-btn {
     color: var(--text-color);
     opacity: 0.7;
     cursor: pointer;
-    padding: 5px;
+    background: none;
+    border: none;
     font-size: 20px;
+    padding: 5px;
+    transition: opacity 0.2s;
 }
 
 .file-upload-btn:hover {
     opacity: 1;
-}
-
-/* Hide default file uploader UI */
-.stFileUploader > div:first-child {
-    display: none;
 }
 
 /* Chat messages */
@@ -349,32 +353,6 @@ def chat_interface():
     # Chat container
     chat_container = st.container()
     
-    # Fixed input container at bottom
-    with st.container():
-        st.markdown('<div class="input-container">', unsafe_allow_html=True)
-        
-        # Create a single row for input
-        cols = st.columns([0.08, 0.92])
-        
-        # File upload button
-        with cols[0]:
-            st.markdown(
-                '<button class="file-upload-btn">📎</button>',
-                unsafe_allow_html=True
-            )
-            uploaded_file = st.file_uploader(
-                "",
-                type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-                label_visibility="collapsed",
-                key="chat_file_uploader"
-            )
-        
-        # Chat input
-        with cols[1]:
-            prompt = st.chat_input("Message")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
     # Display chat history in the main container
     with chat_container:
         for message in st.session_state.messages:
@@ -386,6 +364,32 @@ def chat_interface():
                     elif message["file_data"]["type"] == "text":
                         with st.expander("📄 View File Content"):
                             st.text(message["file_data"]["data"])
+    
+    # Fixed input container at bottom
+    with st.container():
+        st.markdown('<div class="input-container">', unsafe_allow_html=True)
+        
+        # File upload and input in a single row
+        cols = st.columns([0.08, 0.92])
+        
+        with cols[0]:
+            st.markdown('<div class="file-upload-container">', unsafe_allow_html=True)
+            uploaded_file = st.file_uploader(
+                "",
+                type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+                label_visibility="collapsed",
+                key="chat_file_uploader"
+            )
+            st.markdown(
+                '<button class="file-upload-btn" title="Upload file">📎</button>',
+                unsafe_allow_html=True
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with cols[1]:
+            prompt = st.chat_input("Type your message here...")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # Handle input
     if prompt:
