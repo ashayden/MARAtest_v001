@@ -614,6 +614,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         # Create containers for dynamic updates
         progress_text = st.empty()
         specialist_containers = st.container()
+        error_container = st.container()  # Container for error messages
         
         # Progress indicator with spinner
         progress_text.markdown("""
@@ -647,43 +648,50 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     specialist_placeholders[domain] = st.empty()
             
             for domain in domains:
-                # Update progress message for current specialist
-                progress_text.markdown(f"""
-                <div class="processing-message">
-                    <div class="spinner"></div>
-                    <span>Consulting {domain.title()} specialist...</span>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                if domain not in orchestrator.agents:
-                    orchestrator.agents[domain] = orchestrator.create_specialist(domain)
-                
-                specialist_response = ""
-                response_container = specialist_placeholders[domain]
-                
-                # Initialize the expander
-                with response_container:
-                    with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
-                        response_text = st.empty()
-                
-                for chunk in orchestrator.agents[domain].generate_response(
-                    parts,
-                    previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
-                    stream=True
-                ):
-                    specialist_response += chunk
-                    # Update the response text in real-time
-                    response_text.markdown(specialist_response)
-                
-                # Store specialist response in session state
-                if 'specialist_responses' not in st.session_state:
-                    st.session_state.specialist_responses = {}
-                st.session_state.specialist_responses[domain] = specialist_response
-                
-                specialist_responses.append({
-                    'domain': domain,
-                    'response': specialist_response
-                })
+                try:
+                    # Update progress message for current specialist
+                    progress_text.markdown(f"""
+                    <div class="processing-message">
+                        <div class="spinner"></div>
+                        <span>Consulting {domain.title()} specialist...</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    if domain not in orchestrator.agents:
+                        orchestrator.agents[domain] = orchestrator.create_specialist(domain)
+                    
+                    specialist_response = ""
+                    response_container = specialist_placeholders[domain]
+                    
+                    # Initialize the expander
+                    with response_container:
+                        with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
+                            response_text = st.empty()
+                    
+                    for chunk in orchestrator.agents[domain].generate_response(
+                        parts,
+                        previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
+                        stream=True
+                    ):
+                        specialist_response += chunk
+                        # Update the response text in real-time
+                        response_text.markdown(specialist_response)
+                    
+                    # Store specialist response in session state
+                    if 'specialist_responses' not in st.session_state:
+                        st.session_state.specialist_responses = {}
+                    st.session_state.specialist_responses[domain] = specialist_response
+                    
+                    specialist_responses.append({
+                        'domain': domain,
+                        'response': specialist_response
+                    })
+                except Exception as e:
+                    with error_container:
+                        st.error(f"Error with {domain} specialist: {str(e)}")
+                        with st.expander("Show detailed error", expanded=False):
+                            st.code(traceback.format_exc())
+                    continue  # Continue with next specialist
         
         # Generate synthesis
         progress_text.markdown("""
@@ -720,9 +728,10 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         return synthesis
         
     except Exception as e:
-        st.error(f"Orchestrator error: {str(e)}")
-        if st.checkbox("Show detailed error"):
-            st.error("Full error details:", exc_info=True)
+        with error_container:
+            st.error(f"Orchestrator error: {str(e)}")
+            with st.expander("Show detailed error", expanded=False):
+                st.code(traceback.format_exc())
         return None
 
 def chat_interface():
