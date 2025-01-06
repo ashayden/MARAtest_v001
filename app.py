@@ -82,462 +82,78 @@ except ImportError:
 # Update the CSS for proper width control
 st.markdown("""
 <style>
-/* Remove padding and set max-width */
-.block-container {
-    max-width: none !important;
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
-    padding-top: 0.5rem !important;
-}
-
-/* Sidebar width */
-section[data-testid="stSidebar"] > div {
-    width: 350px !important;
-    padding: 1rem !important;
-}
-
-/* Main content area */
-.main > .block-container {
-    max-width: none !important;
-    padding: 2rem 5rem !important;
-}
-
-/* Modern dark theme */
-:root {
-    --background-color: #1a1a1a;
-    --input-background: #2d2d2d;
-    --text-color: #ffffff;
-    --border-color: #404040;
-    --accent-color: #4CAF50;
-    --hover-color: #45a049;
-}
-
-/* Ensure content doesn't get hidden behind input */
+/* Main container width */
 .main .block-container {
-    padding-bottom: 200px !important;
+    max-width: 1000px !important;  /* Narrower max-width */
+    padding: 2rem 3rem !important;  /* Reduced padding */
+    margin: 0 auto !important;  /* Center content */
 }
 
-/* Chat container */
-.chat-container {
-    margin-bottom: 140px;  /* Space for input area */
-}
-
-/* Response container styling */
-.response-container {
-    position: relative;
-    padding-right: 2.5rem;
-    width: 100%;
-}
-
-/* Expander styling */
-.streamlit-expanderHeader {
-    background-color: var(--input-background) !important;
-    border: none !important;
-    border-radius: 8px !important;
-    padding: 1rem !important;
-    margin-bottom: 0.5rem !important;
-    width: 100% !important;
-}
-
-/* Question response styling */
-.question-response {
-    margin-top: 1rem;
-    padding: 1rem;
-    background: var(--input-background);
-    border-radius: 8px;
-    width: 100%;
-}
-
-/* Hide Streamlit components */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
-
-/* Sidebar menu items */
-section[data-testid="stSidebar"] .streamlit-expanderHeader {
-    background-color: transparent !important;
-    border: none !important;
-    padding: 0.5rem !important;
-}
-
-section[data-testid="stSidebar"] .streamlit-expanderContent {
-    border: none !important;
-    background-color: transparent !important;
-    padding: 0.5rem !important;
-}
-
-/* Chat messages */
-.stChatMessage {
-    display: flex;
-    align-items: flex-start;
-    gap: 1rem;
-    padding: 1rem;
-    margin-bottom: 1rem;
-    background: var(--input-background);
-    border-radius: 15px;
-}
-
-/* Align avatar with content */
-.stChatMessage .avatar {
-    flex-shrink: 0;
-    margin-top: 0.25rem;
-}
-
-/* Style expanders in chat messages */
-.stChatMessage .streamlit-expanderHeader {
-    font-size: 1rem !important;
-    font-weight: 600 !important;
-    margin: 0 !important;
-    padding: 0.75rem 1rem !important;
-}
-
-/* Style suggestion buttons */
-.stChatMessage button {
-    width: 100%;
-    text-align: left;
-    margin: 0.5rem 0;
-    padding: 0.75rem 1rem;
-    background: var(--input-background);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    transition: all 0.2s ease;
-}
-
-.stChatMessage button:hover {
-    background: var(--hover-color);
-    border-color: var(--accent-color);
-}
-
-/* Ensure consistent spacing in expanders */
-.streamlit-expanderContent {
-    padding: 1rem !important;
-}
-
-/* Input container */
-div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: var(--background-color);
-    border-top: 1px solid var(--border-color);
-    padding: 1rem;
-    z-index: 1000;
-}
-
-/* Style Streamlit's chat input */
-.stChatInput {
-    margin-bottom: 0 !important;
-}
-
-.stChatInput > div {
-    padding: 0 !important;
-}
-
-/* Style file uploader */
-[data-testid="stFileUploader"] {
-    width: 100%;
-    margin-bottom: 1rem;
-}
-
-[data-testid="stFileUploader"] > section {
-    padding: 0.5rem !important;
-    border-radius: 8px;
-    background: var(--input-background);
-    border: 1px dashed var(--border-color);
-}
-
-[data-testid="stFileUploader"] > section:hover {
-    border-color: var(--accent-color);
-}
-
-[data-testid="stFileUploader"] [data-testid="stMarkdownContainer"] {
-    display: none;  /* Hide the default label */
-}
-
-/* File uploader drop zone */
-.uploadedFile {
-    background: rgba(255, 255, 255, 0.05) !important;
-    border-radius: 4px;
-    padding: 0.25rem 0.5rem !important;
-    margin: 0.25rem 0;
-}
-
-/* File uploader button */
-[data-testid="stFileUploader"] button {
-    background: var(--accent-color) !important;
-    color: white !important;
-    border: none !important;
-    padding: 0.5rem 1rem !important;
-    border-radius: 4px !important;
-}
-
-[data-testid="stFileUploader"] button:hover {
-    background: var(--hover-color) !important;
-}
-
-/* Custom file uploader label */
-.file-uploader-label {
-    font-size: 0.9rem;
-    color: var(--text-color);
-    opacity: 0.8;
-    margin-bottom: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* Ensure proper spacing between elements */
-.stChatInput {
-    margin-top: 1rem !important;
-}
-
-/* Add custom file uploader label */
-.file-uploader-container::before {
-    content: "📎 Attach files";
-    display: block;
-    margin-bottom: 0.5rem;
-    color: var(--text-color);
-    opacity: 0.8;
-    font-size: 0.9rem;
-}
-
-/* Ensure content doesn't get hidden */
-.main .block-container {
-    padding-bottom: 160px;
-}
-
-/* Specialist container styling */
-.specialist-container {
-    margin: 1rem 0;
-    border-left: 3px solid var(--accent-color);
-    padding-left: 1rem;
-}
-
-/* Analysis sections */
-.initial-analysis {
-    border-left-color: #2196F3;
-}
-
-.final-synthesis {
-    border-left-color: #9C27B0;
-}
-
-/* Spinner Animation */
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.spinner {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    border-top-color: #fff;
-    animation: spin 1s ease-in-out infinite;
-    margin-right: 10px;
-    vertical-align: middle;
-}
-
-.processing-message {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    margin: 10px 0;
-}
-
-/* Input container styling */
-.input-container {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: var(--background-color);
-    border-top: 1px solid var(--border-color);
-    padding: 1rem;
-    z-index: 1000;
-    backdrop-filter: blur(10px);
-}
-
-/* Ensure content doesn't get hidden behind input */
-.main .block-container {
-    padding-bottom: 200px !important;  /* Increased padding to prevent content hiding */
-    max-width: 1000px;  /* Limit content width for better readability */
-}
-
-/* Style file uploader in fixed container */
-.input-container .stFileUploader {
-    margin-bottom: 0.5rem;
-}
-
-/* Chat input styling */
-.stChatInput {
-    margin-bottom: 0 !important;
-}
-
-.stChatInput > div {
-    padding: 0 !important;
-}
-
-/* Adjust chat message container */
-.chat-message-container {
-    margin-bottom: 180px;  /* Space for fixed input area */
-}
-
-/* Glass effect for input container */
-.input-container {
-    background: rgba(26, 26, 26, 0.8);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Hide default Streamlit padding at the bottom */
-.main .block-container {
-    padding-bottom: 200px !important;
-}
-
-/* Custom styling for the file uploader */
-.file-uploader-container {
-    background: rgba(45, 45, 45, 0.5);
-    border-radius: 8px;
-    padding: 0.5rem;
-    margin-bottom: 0.5rem;
-}
-
-.file-uploader-container .uploadedFile {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
-    padding: 0.25rem;
-}
-
-/* Three-dot menu styling */
-.three-dot-menu {
-    opacity: 0.7;
-    transition: opacity 0.2s ease;
-}
-
-.three-dot-menu:hover {
-    opacity: 1;
-}
-
-/* Improve column spacing */
-[data-testid="column"] {
-    padding: 0 !important;
-}
-
-/* Style the three-dot expander */
-[data-testid="column"] .streamlit-expanderHeader {
-    background: transparent !important;
-    border: none !important;
-    padding: 0.25rem !important;
-    margin: 0 !important;
-    color: rgba(255, 255, 255, 0.7);
-}
-
-[data-testid="column"] .streamlit-expanderHeader:hover {
-    color: rgba(255, 255, 255, 1);
-}
-
-/* Style copy button */
-[data-testid="column"] button {
-    width: 100%;
-    padding: 0.25rem 0.5rem;
-    margin: 0;
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.7);
-    transition: all 0.2s ease;
-}
-
-[data-testid="column"] button:hover {
-    color: rgba(255, 255, 255, 1);
-    background: rgba(255, 255, 255, 0.1);
-}
-
-/* Add spacing between synthesis and suggestions */
-[data-testid="stExpander"] + div {
-    margin-top: 1rem;
-}
-
-/* Increase main container width */
-.main .block-container {
-    max-width: 1200px !important;  /* Increased from 1000px */
-    padding-bottom: 200px !important;
-}
-
-/* Menu button styling */
-.menu-button {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.7);
-    cursor: pointer;
-    padding: 0.25rem;
-    transition: color 0.2s ease;
-    float: right;
-}
-
-.menu-button:hover {
-    color: rgba(255, 255, 255, 1);
-}
-
-/* Menu container styling */
-.menu-container {
-    position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
-    z-index: 1000;
-}
-
-/* Response container positioning */
-.response-container {
-    position: relative;
-    padding-right: 2.5rem;
-}
-
-/* Sidebar styling */
-section[data-testid="stSidebar"] {
+/* Sidebar styling - allow resizing */
+[data-testid="stSidebar"] {
+    min-width: 300px !important;
+    max-width: 500px !important;
+    width: auto !important;
     background-color: var(--background-color);
     padding: 1rem;
-    width: 350px !important;
 }
 
-section[data-testid="stSidebar"] > div {
+[data-testid="stSidebar"] > div {
     background-color: var(--background-color);
     padding: 0 !important;
 }
 
-/* Sidebar expander styling */
-section[data-testid="stSidebar"] .streamlit-expanderHeader {
+[data-testid="stSidebar"] .streamlit-expanderHeader {
     background-color: var(--input-background) !important;
     border: 1px solid var(--border-color) !important;
     border-radius: 8px !important;
     padding: 1rem !important;
     margin-bottom: 0.5rem !important;
+    transition: background-color 0.2s ease;
 }
 
-section[data-testid="stSidebar"] .streamlit-expanderContent {
-    border: none !important;
-    padding: 1rem !important;
+[data-testid="stSidebar"] .streamlit-expanderHeader:hover {
+    background-color: var(--hover-color) !important;
 }
 
-/* Sidebar slider styling */
-section[data-testid="stSidebar"] .stSlider > div {
-    margin-bottom: 1rem !important;
+/* Chat message container improvements */
+.stChatMessage {
+    max-width: 850px !important;  /* Limit message width */
+    margin: 1rem auto !important;  /* Center messages */
+    background: var(--input-background);
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Sidebar info box styling */
-section[data-testid="stSidebar"] .stAlert {
-    margin-top: 1rem !important;
-    margin-bottom: 1rem !important;
-    padding: 0.75rem !important;
-    border-radius: 8px !important;
+/* Analysis block styling */
+.analysis-block {
+    border-left: 3px solid var(--accent-color);
+    padding: 1rem;
+    margin: 1rem 0;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
 }
+
+/* Action buttons styling */
+.action-button {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.action-button:hover {
+    background: var(--hover-color);
+    border-color: var(--accent-color);
+}
+
+/* Rest of your existing CSS... */
 </style>
 """, unsafe_allow_html=True)
 
@@ -941,15 +557,7 @@ def get_domain_avatar(domain: str) -> str:
 def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None):
     """Process input through the collaborative agent system."""
     try:
-        # Reset state for new request
-        st.session_state.specialist_responses = {}
-        st.session_state.current_domains = []
-        st.session_state.suggestions = []
-        
-        # Prepare messages
-        parts = prepare_messages(prompt, files_data)
-        
-        # Create placeholders
+        # Create placeholders outside of state reset
         progress_placeholder = st.empty()
         error_container = st.empty()
         
@@ -961,6 +569,14 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             </div>
             """, unsafe_allow_html=True)
         
+        # Reset state for new request
+        st.session_state.specialist_responses = {}
+        st.session_state.current_domains = []
+        st.session_state.suggestions = []
+        
+        # Prepare messages
+        parts = prepare_messages(prompt, files_data)
+        
         # Get initial analysis
         update_progress("Performing initial analysis...")
         
@@ -970,7 +586,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 initial_response += chunk
         
         if initial_response:
-            # Create and immediately display initial analysis message
+            # Create initial analysis message
             initial_message = {
                 "role": "assistant",
                 "type": "initial_analysis",
@@ -979,9 +595,9 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             }
             st.session_state.messages.append(initial_message)
             
-            # Force display update but maintain progress indicator
+            # Update display without full rerun
             with st.empty():
-                st.rerun()
+                display_message(initial_message)
         
         # Extract text content for specialist identification
         text_content = ""
@@ -1027,9 +643,9 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                         st.session_state.messages.append(specialist_message)
                         synthesis_inputs.append({'text': specialist_response})
                         
-                        # Force display update but maintain progress indicator
+                        # Update display without full rerun
                         with st.empty():
-                            st.rerun()
+                            display_message(specialist_message)
                     
                 except Exception as e:
                     error_container.error(f"Error with {domain} specialist: {str(e)}")
@@ -1048,7 +664,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 synthesis += chunk
         
         if synthesis:
-            # Create and display synthesis message
+            # Create synthesis message
             synthesis_message = {
                 "role": "assistant",
                 "type": "synthesis",
@@ -1056,10 +672,12 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 "avatar": "📊"
             }
             st.session_state.messages.append(synthesis_message)
-            with st.empty():
-                st.rerun()
             
-            # Generate and display suggestions
+            # Update display without full rerun
+            with st.empty():
+                display_message(synthesis_message)
+            
+            # Generate suggestions
             update_progress("Generating follow-up questions...")
             try:
                 suggestions = generate_suggestions(synthesis)
@@ -1071,8 +689,10 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                         "avatar": "💡"
                     }
                     st.session_state.messages.append(suggestions_message)
+                    
+                    # Update display without full rerun
                     with st.empty():
-                        st.rerun()
+                        display_message(suggestions_message)
             except Exception as e:
                 error_container.error(f"Error generating suggestions: {str(e)}")
         
@@ -1163,53 +783,69 @@ def display_message(message: dict):
     if role == 'user':
         with st.chat_message("user"):
             st.markdown(content)
+            if message.get("files_data"):
+                for file_data in message["files_data"]:
+                    if file_data["type"] == "image":
+                        st.image(file_data["display_data"])
+                    elif file_data["type"] == "text":
+                        with st.expander(f"📄 {file_data['name']}", expanded=False):
+                            st.text(file_data["data"])
+    
     elif role == 'assistant':
         avatar = message.get("avatar", "🤖")
         with st.chat_message("assistant", avatar=avatar):
             if message.get("type") == "initial_analysis":
-                col1, col2 = st.columns([20, 1])
-                with col1:
-                    with st.expander("Initial Analysis", expanded=False):
-                        st.markdown(message["content"])
-                with col2:
-                    if st.button("⋮", key=f"menu_initial_{hash(str(message))}", help="Copy content"):
-                        copy_to_clipboard(message["content"])
+                with st.expander("Initial Analysis", expanded=False):
+                    st.markdown(message["content"])
+                    st.markdown("---")
+                    col1, col2 = st.columns([1, 1])
+                    with col1:
+                        if st.button("📋 Copy Analysis", key=f"copy_initial_{hash(str(message))}"):
+                            copy_to_clipboard(message["content"])
             
             elif message.get("type") == "specialist":
-                col1, col2 = st.columns([20, 1])
-                with col1:
-                    with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
-                        st.markdown(message["content"])
-                with col2:
-                    if st.button("⋮", key=f"menu_specialist_{hash(str(message))}", help="Copy content"):
-                        copy_to_clipboard(message["content"])
+                with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
+                    st.markdown(message["content"])
+                    st.markdown("---")
+                    col1, col2 = st.columns([1, 1])
+                    with col1:
+                        if st.button("📋 Copy Analysis", key=f"copy_specialist_{hash(str(message))}"):
+                            copy_to_clipboard(message["content"])
             
             elif message.get("type") == "synthesis":
-                col1, col2 = st.columns([20, 1])
-                with col1:
-                    with st.expander("Final Synthesis", expanded=True):
-                        st.markdown(message["content"])
-                with col2:
-                    if st.button("⋮", key=f"menu_synthesis_{hash(str(message))}", help="Copy content"):
-                        copy_to_clipboard(message["content"])
+                with st.expander("Final Synthesis", expanded=True):
+                    st.markdown(message["content"])
+                    st.markdown("---")
+                    col1, col2, col3 = st.columns([1, 1, 1])
+                    with col1:
+                        if st.button("📋 Copy Synthesis", key=f"copy_synthesis_{hash(str(message))}"):
+                            copy_to_clipboard(message["content"])
+                    with col2:
+                        if st.button("💾 Download Report", key=f"download_synthesis_{hash(str(message))}"):
+                            # Generate full report content
+                            report_content = "# Analysis Report\n\n"
+                            for msg in st.session_state.messages:
+                                if msg.get("type") in ["initial_analysis", "specialist", "synthesis"]:
+                                    report_content += f"## {msg.get('type', '').replace('_', ' ').title()}\n\n"
+                                    report_content += msg["content"] + "\n\n"
+                            
+                            # Create download link
+                            b64 = base64.b64encode(report_content.encode()).decode()
+                            href = f'<a href="data:text/markdown;base64,{b64}" download="analysis_report.md">Click to download</a>'
+                            st.markdown(href, unsafe_allow_html=True)
             
             elif message.get("type") == "suggestions":
-                st.markdown("")  # Add spacing
                 st.markdown("### 🤔 Explore Further")
                 for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
-                    col1, col2 = st.columns([20, 1])
-                    with col1:
+                    with st.container():
                         if st.button(
-                            headline,
+                            f"💡 {headline}",
                             key=f"suggestion_{idx}_{hash(str(message))}",
                             help=full_question,
                             use_container_width=True
                         ):
                             st.session_state.next_prompt = full_question
                             st.rerun()
-                    with col2:
-                        if st.button("⋮", key=f"menu_suggestion_{idx}_{hash(str(message))}", help="Copy suggestion"):
-                            copy_to_clipboard(f"{headline}\n{full_question}")
             else:
                 st.markdown(content)
 
