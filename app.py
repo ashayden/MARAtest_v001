@@ -88,139 +88,85 @@ except ImportError:
 # Core CSS for layout and theme
 st.markdown("""
 <style>
-/* Core theme and layout */
-.stApp {
-    max-width: 100%;
+/* Base theme */
+[data-testid="stAppViewContainer"] {
+    background-color: #1a1a1a;
 }
 
 /* Main container */
 .main .block-container {
-    padding-top: 1rem;
-    padding-right: 3rem;
-    padding-left: 3rem;
-    padding-bottom: 1rem;
+    max-width: 1000px;
+    padding-bottom: 100px;
+    margin: 0 auto;
 }
 
 /* Sidebar */
 [data-testid="stSidebar"] {
-    min-width: 18rem;
-    max-width: 35rem;
     background-color: #1a1a1a;
-}
-
-[data-testid="stSidebar"] .block-container {
-    padding-top: 2rem;
-    padding-right: 1rem;
-    padding-left: 1rem;
-    padding-bottom: 2rem;
+    padding: 2rem 1rem;
 }
 
 /* Chat messages */
 [data-testid="stChatMessage"] {
     background-color: #2d2d2d;
     border: 1px solid #404040;
-    border-radius: 10px;
-    padding: 1.5rem;
-    margin: 1rem auto;
-    max-width: 1200px;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 0.5rem 0;
 }
 
-/* Expander styling */
-.streamlit-expanderHeader {
-    background-color: #2d2d2d !important;
-    border: 1px solid #404040 !important;
-    border-radius: 8px !important;
-    padding: 1rem !important;
-    margin: 0.5rem 0 !important;
-}
-
-.streamlit-expanderContent {
-    border: none !important;
-    padding: 1rem !important;
-    background-color: transparent !important;
-}
-
-/* Input area */
+/* Chat input container */
 .stChatInput {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
+    padding: 1rem 2rem;
     background-color: #1a1a1a;
-    padding: 1rem 3rem;
-    margin: 0;
+    border-top: 1px solid #404040;
     z-index: 999;
 }
 
 .stChatInput > div {
-    max-width: 1200px;
+    max-width: 1000px;
     margin: 0 auto;
+    display: flex;
+    gap: 0.5rem;
 }
 
 /* File uploader */
 [data-testid="stFileUploader"] {
-    background-color: #2d2d2d;
-    border: 1px dashed #404040;
-    border-radius: 8px;
-    padding: 1rem;
+    width: auto !important;
+}
+
+[data-testid="stFileUploader"] button {
+    padding: 0.5rem !important;
+    border-radius: 6px !important;
 }
 
 /* Buttons */
 .stButton > button {
-    width: 100%;
     background-color: transparent;
-    color: white;
     border: 1px solid #404040;
+    color: white;
     border-radius: 6px;
-    padding: 0.75rem 1rem;
-    transition: all 0.2s ease;
+    padding: 0.5rem 1rem;
 }
 
 .stButton > button:hover {
-    background-color: #45a049;
     border-color: #4CAF50;
-}
-
-/* Download link */
-a.download-link {
-    display: inline-block;
-    padding: 0.75rem 1rem;
-    background-color: #2d2d2d;
-    color: white;
-    text-decoration: none;
-    border: 1px solid #404040;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-}
-
-a.download-link:hover {
-    background-color: #45a049;
-    border-color: #4CAF50;
-}
-
-/* Progress indicator */
-.processing-message {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 1rem;
-    background-color: #2d2d2d;
-    border-radius: 8px;
-    margin: 0.5rem auto;
-    max-width: 1200px;
-}
-
-/* Add padding at bottom for fixed input */
-.main .block-container::after {
-    content: "";
-    display: block;
-    height: 8rem;
+    background-color: rgba(76, 175, 80, 0.1);
 }
 
 /* Hide default elements */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
+
+/* Ensure content doesn't go behind input */
+.main .block-container {
+    padding-bottom: 100px !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -773,7 +719,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
 def chat_interface():
     """Modern chat interface following Streamlit best practices."""
     try:
-        # Initialize state and configuration
+        # Initialize session state
         initialize_session_state()
         
         # Set up the layout
@@ -787,37 +733,49 @@ def chat_interface():
         # Get orchestrator
         orchestrator = get_orchestrator()
         
-        # Create main chat container
-        chat_container = st.container()
+        # Display chat messages
+        for message in st.session_state.messages:
+            display_message(message)
         
-        # Create message display area
-        with chat_container:
-            # Display existing messages
-            for message in st.session_state.messages:
-                display_message(message)
-            
-            # Create input area container
-            input_container = st.container()
-            with input_container:
-                # Create columns for file upload and input
-                col1, col2 = st.columns([1, 4])
-                with col1:
-                    uploaded_files = st.file_uploader(
-                        "📎 Attach files",
-                        type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-                        accept_multiple_files=True,
-                        key=st.session_state.file_uploader_key,
-                        label_visibility="collapsed"
-                    )
-                with col2:
-                    prompt = st.chat_input("Message", key="chat_input")
+        # Create input area
+        col1, col2 = st.columns([7, 1])
+        
+        # Chat input
+        with col1:
+            prompt = st.chat_input("Message", key="chat_input")
+        
+        # File upload
+        with col2:
+            uploaded_files = st.file_uploader(
+                "",
+                type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+                accept_multiple_files=True,
+                key=st.session_state.file_uploader_key,
+                label_visibility="collapsed"
+            )
         
         # Process new input
         if prompt:
             # Handle file uploads
-            files_data = process_uploads(uploaded_files) if uploaded_files else []
+            files_data = []
+            if uploaded_files:
+                for file in uploaded_files:
+                    file_data = process_file_upload(file)
+                    if file_data:
+                        files_data.append(file_data)
+                        st.toast(f"📎 {file_data['name']} attached")
             
-            # Add user message to history
+            # Add user message
+            st.chat_message("user").markdown(prompt)
+            if files_data:
+                for file_data in files_data:
+                    if file_data["type"] == "image":
+                        st.image(file_data["display_data"])
+                    elif file_data["type"] == "text":
+                        with st.expander(f"📄 {file_data['name']}", expanded=False):
+                            st.text(file_data["data"])
+            
+            # Add to message history
             st.session_state.messages.append({
                 "role": "user",
                 "content": prompt,
@@ -826,11 +784,15 @@ def chat_interface():
             
             # Process through orchestrator
             try:
-                response = process_with_orchestrator(orchestrator, prompt, files_data)
-                if response:
-                    st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
+                with st.status("Processing...", expanded=True) as status:
+                    response = process_with_orchestrator(orchestrator, prompt, files_data)
+                    if response:
+                        st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
+                    status.update(label="Complete!", state="complete", expanded=False)
             except Exception as e:
-                handle_error(e)
+                st.error(f"Error: {str(e)}")
+                with st.expander("Show error details"):
+                    st.code(traceback.format_exc())
         
         # Handle suggestion clicks
         if 'next_prompt' in st.session_state:
@@ -839,33 +801,12 @@ def chat_interface():
             st.rerun()
             
     except Exception as e:
-        handle_error(e)
-
-def process_uploads(uploaded_files):
-    """Process multiple file uploads with progress tracking."""
-    files_data = []
-    if uploaded_files:
-        progress_text = "Processing uploads..."
-        progress_bar = st.progress(0)
-        
-        for i, uploaded_file in enumerate(uploaded_files):
-            file_data = process_file_upload(uploaded_file)
-            if file_data:
-                files_data.append(file_data)
-                st.toast(f"📎 {file_data['name']} attached")
-            progress_bar.progress((i + 1) / len(uploaded_files))
-        
-        progress_bar.empty()
-    return files_data
-
-def handle_error(error):
-    """Handle errors in a user-friendly way."""
-    st.error(f"Error: {str(error)}")
-    with st.expander("Show detailed error", expanded=False):
-        st.code(traceback.format_exc())
+        st.error(f"Error: {str(e)}")
+        with st.expander("Show error details"):
+            st.code(traceback.format_exc())
 
 def display_message(message: dict):
-    """Display a chat message following Streamlit best practices."""
+    """Display a chat message in a clean, standard format."""
     role = message.get('role', 'user')
     content = message.get('content', '')
     message_type = message.get('type', '')
@@ -873,82 +814,43 @@ def display_message(message: dict):
     if role == 'user':
         with st.chat_message("user"):
             st.markdown(content)
-            display_attachments(message.get("files_data", []))
+            if message.get("files_data"):
+                for file_data in message["files_data"]:
+                    if file_data["type"] == "image":
+                        st.image(file_data["display_data"])
+                    elif file_data["type"] == "text":
+                        with st.expander(f"📄 {file_data['name']}", expanded=False):
+                            st.text(file_data["data"])
     
     elif role == 'assistant':
         avatar = message.get("avatar", "🤖")
         with st.chat_message("assistant", avatar=avatar):
-            if message_type == "initial_analysis":
-                display_analysis_message("Initial Analysis", content)
+            # Display content
+            st.markdown(content)
             
-            elif message_type == "specialist":
-                display_analysis_message(f"{message['domain'].title()} Analysis", content)
+            # Add copy button if not suggestions
+            if message_type != "suggestions":
+                if st.button("📋 Copy", key=f"copy_{hash(content)}"):
+                    copy_to_clipboard(content)
             
-            elif message_type == "synthesis":
-                display_synthesis_message(content)
+            # Add download button for synthesis
+            if message_type == "synthesis":
+                report_content = generate_full_report()
+                st.download_button(
+                    "💾 Download Report",
+                    report_content,
+                    file_name="analysis_report.md",
+                    mime="text/markdown",
+                    key=f"download_{hash(content)}"
+                )
             
-            elif message_type == "suggestions":
-                display_suggestions(message.get("suggestions", []))
-            
-            else:
-                st.markdown(content)
-
-def display_attachments(files_data):
-    """Display file attachments in chat messages."""
-    if not files_data:
-        return
-        
-    for file_data in files_data:
-        if file_data["type"] == "image":
-            st.image(file_data["display_data"])
-        elif file_data["type"] == "text":
-            with st.expander(f"📄 {file_data['name']}", expanded=False):
-                st.text(file_data["data"])
-
-def display_analysis_message(title: str, content: str):
-    """Display an analysis message with copy functionality."""
-    with st.expander(title, expanded=False):
-        st.markdown(content)
-        st.markdown("---")
-        col1, col2 = st.columns([6, 1])
-        with col2:
-            if st.button("📋", key=f"copy_{hash(content)}", help="Copy to clipboard"):
-                copy_to_clipboard(content)
-
-def display_synthesis_message(content: str):
-    """Display the synthesis message with enhanced functionality."""
-    with st.expander("Final Synthesis", expanded=True):
-        st.markdown(content)
-        st.markdown("---")
-        
-        # Create action buttons
-        col1, col2, col3 = st.columns([4, 4, 4])
-        
-        with col1:
-            if st.button("📋 Copy", key=f"copy_synthesis_{hash(content)}"):
-                copy_to_clipboard(content)
-        
-        with col2:
-            # Generate full report content
-            report_content = generate_full_report()
-            st.markdown(
-                get_download_link(report_content, "analysis_report.md"),
-                unsafe_allow_html=True
-            )
-
-def display_suggestions(suggestions):
-    """Display follow-up suggestions."""
-    st.markdown("### 🤔 Explore Further")
-    for idx, (headline, full_question) in enumerate(suggestions):
-        with st.container():
-            if st.button(
-                f"💡 {headline}",
-                key=f"suggestion_{idx}_{hash(str(headline))}",
-                help=full_question,
-                use_container_width=True
-            ):
-                st.session_state.next_prompt = full_question
-                st.experimental_rerun()
+            # Display suggestions as buttons
+            if message_type == "suggestions":
+                st.markdown("### Follow-up Questions")
+                for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
+                    if st.button(f"💡 {headline}", key=f"suggest_{idx}_{hash(str(headline))}"):
+                        st.session_state.next_prompt = full_question
+                        st.rerun()
 
 def generate_full_report() -> str:
     """Generate a full report from all messages."""
