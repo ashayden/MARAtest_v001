@@ -862,12 +862,12 @@ def chat_interface():
         orchestrator = get_orchestrator()
         
         # Create containers in specific order
+        input_container = st.container()  # For input at top
         chat_container = st.container()  # For message history
-        input_container = st.container()  # For input at bottom
         
-        # Handle input first (but it will appear at bottom due to container order)
+        # Handle input at top
         with input_container:
-            # File uploader in a styled container
+            # File uploader and chat input in columns
             col1, col2 = st.columns([3, 1])
             with col1:
                 uploaded_files = st.file_uploader(
@@ -879,31 +879,9 @@ def chat_interface():
             
             # Chat input
             prompt = st.chat_input("Message", key="chat_input")
+            st.markdown("---")  # Visual separator
         
-        # Display chat history
-        with chat_container:
-            for message in st.session_state.messages:
-                with st.chat_message(message["role"]):
-                    st.write(message["content"])
-                    # Handle files_data
-                    if message.get("files_data"):
-                        for file_data in message["files_data"]:
-                            if file_data["type"] == "image":
-                                st.image(file_data["display_data"])
-                            elif file_data["type"] == "text":
-                                with st.expander(f"📄 {file_data['name']}"):
-                                    st.text(file_data["data"])
-            
-            # Display suggestions after the last message
-            if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
-                display_suggestions()
-        
-        # Check for suggestion click
-        if 'next_prompt' in st.session_state:
-            prompt = st.session_state.next_prompt
-            del st.session_state.next_prompt
-        
-        # Handle input
+        # Handle input if provided
         if prompt:
             # Process uploaded files
             files_data = []
@@ -914,38 +892,91 @@ def chat_interface():
                         files_data.append(file_data)
                         st.toast(f"📎 {file_data['name']} attached")
             
-            # Display user message
-            with chat_container:
-                st.chat_message("user").write(prompt)
-                if files_data:
-                    for file_data in files_data:
-                        if file_data["type"] == "image":
-                            st.chat_message("user").image(file_data["display_data"])
-                        else:
-                            st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
-            
             try:
                 # Process through orchestrator
                 response = process_with_orchestrator(orchestrator, prompt, files_data if files_data else None)
                 
                 if response:
-                    # Display assistant response
-                    with chat_container:
-                        st.chat_message("assistant").write(response)
-                        
-                        # Generate and display suggestions immediately after response
-                        suggestions = generate_suggestions(response)
-                        if suggestions:
-                            st.session_state.suggestions = suggestions
-                            display_suggestions()
-                    
                     # Update file uploader key to clear files
                     st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
                     
+                    # Generate suggestions
+                    suggestions = generate_suggestions(response)
+                    if suggestions:
+                        st.session_state.suggestions = suggestions
+                
             except Exception as e:
                 st.error(f"Error: {str(e)}")
                 if st.checkbox("Show detailed error"):
                     st.error("Full error details:", exc_info=True)
+        
+        # Display chat history with consistent container styling
+        with chat_container:
+            for message in st.session_state.messages:
+                if message["role"] == "user":
+                    with st.chat_message("user"):
+                        st.write(message["content"])
+                        # Handle files_data
+                        if message.get("files_data"):
+                            for file_data in message["files_data"]:
+                                if file_data["type"] == "image":
+                                    st.image(file_data["display_data"])
+                                elif file_data["type"] == "text":
+                                    with st.expander(f"📄 {file_data['name']}"):
+                                        st.text(file_data["data"])
+                else:  # assistant response
+                    with st.container():
+                        # Initial Analysis
+                        with st.expander("🎯 Initial Analysis", expanded=True):
+                            st.markdown(st.session_state.specialist_responses.get('initial_analysis', ''))
+                        
+                        # Domain Specialist Responses
+                        if 'current_domains' in st.session_state:
+                            for domain in st.session_state.current_domains:
+                                with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
+                                    st.markdown(st.session_state.specialist_responses.get(domain, ''))
+                        
+                        # Final Synthesis
+                        with st.expander("📊 Final Synthesis", expanded=True):
+                            st.markdown(message["content"])
+                            
+                            # Display suggestions immediately after synthesis
+                            if st.session_state.suggestions:
+                                st.markdown("---")
+                                st.markdown("### 🤔 Explore Further")
+                                
+                                # Create three columns with equal width
+                                cols = st.columns(3)
+                                
+                                # Define button styles for each type
+                                button_styles = [
+                                    "💡",  # For deep dive
+                                    "🔄",  # For related topics
+                                    "🌟"   # For unexpected connections
+                                ]
+                                
+                                # Display each suggestion in its own column
+                                for idx, ((headline, full_question), style, col) in enumerate(zip(
+                                    st.session_state.suggestions,
+                                    button_styles,
+                                    cols
+                                )):
+                                    with col:
+                                        if st.button(
+                                            f"{style} {headline}",
+                                            key=f"suggestion_{idx}",
+                                            help=full_question  # Show full question on hover
+                                        ):
+                                            st.session_state.next_prompt = full_question
+                                            st.rerun()
+                                        
+                                        # Show truncated version of full question below button
+                                        st.caption(full_question[:100] + "..." if len(full_question) > 100 else full_question)
+        
+        # Check for suggestion click
+        if 'next_prompt' in st.session_state:
+            prompt = st.session_state.next_prompt
+            del st.session_state.next_prompt
 
     except OSError as e:
         if "inotify watch limit reached" in str(e):
