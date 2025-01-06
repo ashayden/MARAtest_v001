@@ -92,7 +92,7 @@ header {visibility: hidden;}
 /* Expander styling */
 .streamlit-expanderHeader {
     background-color: var(--input-background) !important;
-    border: 1px solid var(--border-color) !important;
+    border: none !important;
     border-radius: 8px !important;
     padding: 1rem !important;
     margin-bottom: 0.5rem !important;
@@ -104,10 +104,22 @@ header {visibility: hidden;}
 
 .streamlit-expanderContent {
     background-color: var(--background-color) !important;
-    border: 1px solid var(--border-color) !important;
-    border-top: none !important;
+    border: none !important;
     border-radius: 0 0 8px 8px !important;
     padding: 1rem !important;
+}
+
+/* Sidebar menu items */
+section[data-testid="stSidebar"] .streamlit-expanderHeader {
+    background-color: transparent !important;
+    border: none !important;
+    padding: 0.5rem !important;
+}
+
+section[data-testid="stSidebar"] .streamlit-expanderContent {
+    border: none !important;
+    background-color: transparent !important;
+    padding: 0.5rem !important;
 }
 
 /* Chat messages */
@@ -566,10 +578,7 @@ def model_settings_sidebar():
                 help="Maximum length of specialist responses"
             )
         
-        # Add spacer before How it Works section
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        
-        # Add How it Works section at the bottom
+        # Add How it Works section immediately after Model Settings
         how_it_works_sidebar()
 
 def get_orchestrator():
