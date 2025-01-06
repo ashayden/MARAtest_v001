@@ -83,32 +83,101 @@ class AgentOrchestrator:
         - Use markdown for structure
         """
     
-    def create_specialist(self, expertise: str) -> BaseAgent:
-        """Create a new specialist agent for a specific domain."""
-        # Use the main config for specialists (controlled by sidebar)
-        specialist = BaseAgent(
-            self.config,
-            role=f"specialist_{expertise}"
+    def create_specialist(self, domain: str) -> BaseAgent:
+        """Create a specialist agent for a specific domain."""
+        
+        # Base prompt template for all specialists
+        base_prompt = """You are an expert {domain} specialist. Analyze the provided content focusing specifically on {domain_description}.
+        
+Your analysis should:
+1. Be thorough and insightful
+2. Focus exclusively on {domain}-related aspects
+3. Provide specific examples and evidence
+4. Draw meaningful connections within your domain
+5. Maintain a professional, academic tone
+
+Format your response with:
+1. A clear, specific title that reflects the key {domain} insights
+2. Well-organized sections with clear headings
+3. Concise, focused paragraphs
+4. Specific examples and evidence
+
+Avoid:
+- General introductions or meta-commentary
+- Straying from your domain expertise
+- Repeating information without adding insight
+- Making unsupported claims"""
+
+        # Domain-specific descriptions and configurations
+        domain_configs = {
+            'history': {
+                'description': 'historical context, development, and significance',
+                'title_prefix': 'Historical Analysis'
+            },
+            'culture': {
+                'description': 'cultural significance, traditions, and social practices',
+                'title_prefix': 'Cultural Perspective'
+            },
+            'geography': {
+                'description': 'geographical features, spatial relationships, and environmental factors',
+                'title_prefix': 'Geographic Analysis'
+            },
+            'urban_planning': {
+                'description': 'urban development, city planning, and infrastructure',
+                'title_prefix': 'Urban Development Analysis'
+            },
+            'economics': {
+                'description': 'economic factors, market dynamics, and financial implications',
+                'title_prefix': 'Economic Impact Analysis'
+            },
+            'architecture': {
+                'description': 'architectural styles, building techniques, and design principles',
+                'title_prefix': 'Architectural Analysis'
+            },
+            'sociology': {
+                'description': 'social structures, community dynamics, and demographic patterns',
+                'title_prefix': 'Sociological Analysis'
+            },
+            'art': {
+                'description': 'artistic expressions, visual elements, and creative influences',
+                'title_prefix': 'Artistic Analysis'
+            },
+            'literature': {
+                'description': 'literary works, written traditions, and narrative elements',
+                'title_prefix': 'Literary Analysis'
+            },
+            'music': {
+                'description': 'musical traditions, styles, and cultural significance',
+                'title_prefix': 'Musical Heritage Analysis'
+            },
+            'food': {
+                'description': 'culinary traditions, food culture, and gastronomy',
+                'title_prefix': 'Culinary Analysis'
+            },
+            'religion': {
+                'description': 'religious practices, beliefs, and spiritual significance',
+                'title_prefix': 'Religious Context Analysis'
+            }
+        }
+        
+        # Get domain configuration or use defaults
+        domain_config = domain_configs.get(domain, {
+            'description': f'{domain}-related aspects and implications',
+            'title_prefix': f'{domain.title()} Analysis'
+        })
+        
+        # Create the specialized prompt
+        specialized_prompt = base_prompt.format(
+            domain=domain.title(),
+            domain_description=domain_config['description']
         )
         
-        # Dynamic prompt based on expertise
-        specialist.system_prompt = f"""You are a specialized expert in {expertise}.
-        Your role is to:
-        1. Provide deep domain expertise in {expertise}
-        2. Analyze aspects relevant to your specialty
-        3. Offer unique insights from your field
-        4. Connect your knowledge to the broader context
-        5. Suggest implications and applications
-        
-        Focus on:
-        - Technical accuracy in {expertise}
-        - Practical applications
-        - Current best practices
-        - Emerging trends
-        - Cross-domain implications
-        """
-        
-        return specialist
+        # Create and return the specialist agent
+        return BaseAgent(
+            name=f"{domain}_specialist",
+            system_prompt=specialized_prompt,
+            config=self.config
+        )
     
     def identify_required_specialists(self, input_text: str) -> List[str]:
         """Analyze input to determine required specialist expertise."""

@@ -128,10 +128,22 @@ st.markdown("""
 }
 
 .stChatInput > div {
-    max-width: 1000px;
-    margin: 0 auto;
-    display: flex;
-    gap: 0.5rem;
+    max-width: 800px !important;  /* Narrower width for better readability */
+    margin: 0 auto !important;
+}
+
+.stChatInput textarea {
+    background-color: #2d2d2d !important;
+    border: 1px solid #404040 !important;
+    border-radius: 6px !important;
+    padding: 0.75rem 1rem !important;
+    min-height: 44px !important;
+    max-height: 200px !important;
+}
+
+.stChatInput textarea:focus {
+    border-color: #4CAF50 !important;
+    box-shadow: 0 0 0 1px #4CAF50 !important;
 }
 
 /* File uploader */
@@ -415,60 +427,8 @@ def prepare_messages(text_input: str, files_data: list = None) -> list:
     
     return parts
 
-def how_it_works_sidebar():
-    """Add How it Works section to sidebar."""
-    with st.sidebar:
-        with st.expander("ℹ️ How it Works", expanded=False):
-            st.markdown("""
-            This AI Assistant is unique in its ability to dynamically create specialist agents based on your query's topic. Unlike traditional chatbots that use a one-size-fits-all approach, this system:
-
-            - Creates domain experts in real-time based on your specific topic
-            - Combines insights from multiple specialists for comprehensive answers
-            - Allows fine-tuning of specialist behavior through model controls
-            
-            ---
-            
-            ### Multi-Agent Response Architecture
-            
-            #### Core Components
-            1. **Initializer Agent** (Fixed Settings)
-               - Analyzes input to identify required expertise
-               - Determines which specialists to consult
-               - Provides initial context framework
-            
-            2. **Domain Specialists** (Adjustable Settings)
-               - Created dynamically based on input
-               - Expertise determined in real-time
-               - Controlled by sidebar model settings
-               - Provide domain-specific insights
-            
-            3. **Synthesis Agent** (Fixed Settings)
-               - Integrates all specialist responses
-               - Creates cohesive final report
-               - Maintains consistent structure
-            
-            #### Workflow
-            1. User submits query/content
-            2. Initializer analyzes and identifies needed expertise
-            3. Relevant specialists are created/activated
-            4. Each specialist provides domain insights
-            5. Synthesis agent creates final structured report
-            
-            #### Dynamic Specialist Control
-            - **Creativity Level**: Influences specialist response creativity
-            - **Response Diversity**: Controls response variation
-            - **Choice Range**: Affects word selection breadth
-            - **Maximum Length**: Sets response length limit
-            
-            #### Features
-            - Real-time streaming responses
-            - Collapsible specialist insights
-            - Multi-modal input support
-            - Persistent chat history
-            """)
-
 def model_settings_sidebar():
-    """Sidebar for model settings."""
+    """Sidebar for model settings and documentation."""
     with st.sidebar:
         # Model Settings section
         with st.expander("⚙️ Model Settings", expanded=False):
@@ -518,8 +478,54 @@ def model_settings_sidebar():
                 help="Maximum length of specialist responses"
             )
         
-        # Add How it Works section immediately after Model Settings
-        how_it_works_sidebar()
+        # How it Works section
+        with st.expander("ℹ️ How it Works", expanded=False):
+            st.markdown("""
+            This AI Assistant is unique in its ability to dynamically create specialist agents based on your query's topic. Unlike traditional chatbots that use a one-size-fits-all approach, this system:
+
+            - Creates domain experts in real-time based on your specific topic
+            - Combines insights from multiple specialists for comprehensive answers
+            - Allows fine-tuning of specialist behavior through model controls
+            
+            ---
+            
+            ### Multi-Agent Response Architecture
+            
+            #### Core Components
+            1. **Initializer Agent** (Fixed Settings)
+               - Analyzes input to identify required expertise
+               - Determines which specialists to consult
+               - Provides initial context framework
+            
+            2. **Domain Specialists** (Adjustable Settings)
+               - Created dynamically based on input
+               - Expertise determined in real-time
+               - Controlled by sidebar model settings
+               - Provide domain-specific insights
+            
+            3. **Synthesis Agent** (Fixed Settings)
+               - Integrates all specialist responses
+               - Creates cohesive final report
+               - Maintains consistent structure
+            
+            #### Workflow
+            1. User submits query/content
+            2. Initializer analyzes and identifies needed expertise
+            3. Relevant specialists are created/activated
+            4. Each specialist provides domain insights
+            5. Synthesis agent creates final structured report
+            
+            #### Dynamic Specialist Control
+            - **Creativity Level**: Influences specialist response creativity
+            - **Response Diversity**: Controls response variation
+            - **Choice Range**: Affects word selection breadth
+            - **Maximum Length**: Sets response length limit
+            
+            #### Features
+            - Real-time streaming responses
+            - Collapsible specialist insights
+            - Persistent chat history
+            """)
 
 def get_orchestrator():
     """Get or create the agent orchestrator."""
@@ -728,7 +734,6 @@ def chat_interface():
         # Configure sidebar
         with st.sidebar:
             model_settings_sidebar()
-            how_it_works_sidebar()
         
         # Get orchestrator
         orchestrator = get_orchestrator()
@@ -737,55 +742,24 @@ def chat_interface():
         for message in st.session_state.messages:
             display_message(message)
         
-        # Create input area
-        col1, col2 = st.columns([7, 1])
-        
-        # Chat input
-        with col1:
-            prompt = st.chat_input("Message", key="chat_input")
-        
-        # File upload
-        with col2:
-            uploaded_files = st.file_uploader(
-                "",
-                type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-                accept_multiple_files=True,
-                key=st.session_state.file_uploader_key,
-                label_visibility="collapsed"
-            )
+        # Create centered input area
+        prompt = st.chat_input("Message", key="chat_input")
         
         # Process new input
         if prompt:
-            # Handle file uploads
-            files_data = []
-            if uploaded_files:
-                for file in uploaded_files:
-                    file_data = process_file_upload(file)
-                    if file_data:
-                        files_data.append(file_data)
-                        st.toast(f"📎 {file_data['name']} attached")
-            
             # Add user message
             st.chat_message("user").markdown(prompt)
-            if files_data:
-                for file_data in files_data:
-                    if file_data["type"] == "image":
-                        st.image(file_data["display_data"])
-                    elif file_data["type"] == "text":
-                        with st.expander(f"📄 {file_data['name']}", expanded=False):
-                            st.text(file_data["data"])
             
             # Add to message history
             st.session_state.messages.append({
                 "role": "user",
-                "content": prompt,
-                "files_data": files_data if files_data else None
+                "content": prompt
             })
             
             # Process through orchestrator
             try:
                 with st.status("Processing...", expanded=True) as status:
-                    response = process_with_orchestrator(orchestrator, prompt, files_data)
+                    response = process_with_orchestrator(orchestrator, prompt)
                     if response:
                         st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
                     status.update(label="Complete!", state="complete", expanded=False)
