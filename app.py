@@ -983,52 +983,69 @@ def chat_interface():
                                         st.text(file_data["data"])
                 else:  # assistant response
                     with st.container():
-                        # Initial Analysis
-                        with st.expander("🎯 Initial Analysis", expanded=False):
-                            st.markdown(st.session_state.specialist_responses.get('initial_analysis', ''))
+                        # Store all responses in order
+                        responses_to_display = []
                         
-                        # Domain Specialist Responses (if any)
+                        # 1. Initial Analysis (always first)
+                        if 'initial_analysis' in st.session_state.specialist_responses:
+                            responses_to_display.append({
+                                'title': "🎯 Initial Analysis",
+                                'content': st.session_state.specialist_responses['initial_analysis']
+                            })
+                        
+                        # 2. Domain Specialists (in order they were called)
                         if 'current_domains' in st.session_state:
                             for domain in st.session_state.current_domains:
-                                with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
-                                    st.markdown(st.session_state.specialist_responses.get(domain, ''))
+                                if domain in st.session_state.specialist_responses:
+                                    responses_to_display.append({
+                                        'title': f"🔍 {domain.title()} Analysis",
+                                        'content': st.session_state.specialist_responses[domain]
+                                    })
                         
-                        # Final Synthesis (always last)
-                        with st.expander("📊 Final Synthesis", expanded=False):
-                            st.markdown(message["content"])
-                            
-                            # Display suggestions immediately after synthesis
-                            if st.session_state.suggestions:
-                                st.markdown("---")
-                                st.markdown("### 🤔 Explore Further")
+                        # 3. Final Synthesis (always last)
+                        responses_to_display.append({
+                            'title': "📊 Final Synthesis",
+                            'content': message["content"],
+                            'is_synthesis': True
+                        })
+                        
+                        # Display all responses in order
+                        for response in responses_to_display:
+                            with st.expander(response['title'], expanded=False):
+                                st.markdown(response['content'])
                                 
-                                # Create three columns with equal width
-                                cols = st.columns(3)
-                                
-                                # Define button styles for each type
-                                button_styles = [
-                                    "💡",  # For deep dive
-                                    "🔄",  # For related topics
-                                    "🌟"   # For unexpected connections
-                                ]
-                                
-                                # Display each suggestion in its own column
-                                for idx, ((headline, full_question), style, col) in enumerate(zip(
-                                    st.session_state.suggestions,
-                                    button_styles,
-                                    cols
-                                )):
-                                    with col:
-                                        if st.button(
-                                            f"{style} {headline}",
-                                            key=f"suggestion_{idx}",
-                                            help=full_question  # Show full question on hover
-                                        ):
-                                            st.session_state.next_prompt = full_question
-                                            st.rerun()
-                                        
-                                        # Show truncated version of full question below button
-                                        st.caption(full_question[:100] + "..." if len(full_question) > 100 else full_question)
+                                # Add suggestions only after final synthesis
+                                if response.get('is_synthesis') and st.session_state.suggestions:
+                                    st.markdown("---")
+                                    st.markdown("### 🤔 Explore Further")
+                                    
+                                    # Create three columns with equal width
+                                    cols = st.columns(3)
+                                    
+                                    # Define button styles for each type
+                                    button_styles = [
+                                        "💡",  # For deep dive
+                                        "🔄",  # For related topics
+                                        "🌟"   # For unexpected connections
+                                    ]
+                                    
+                                    # Display each suggestion in its own column
+                                    for idx, ((headline, full_question), style, col) in enumerate(zip(
+                                        st.session_state.suggestions,
+                                        button_styles,
+                                        cols
+                                    )):
+                                        with col:
+                                            if st.button(
+                                                f"{style} {headline}",
+                                                key=f"suggestion_{idx}",
+                                                help=full_question  # Show full question on hover
+                                            ):
+                                                st.session_state.next_prompt = full_question
+                                                st.rerun()
+                                            
+                                            # Show truncated version of full question below button
+                                            st.caption(full_question[:100] + "..." if len(full_question) > 100 else full_question)
         
         # Check for suggestion click
         if 'next_prompt' in st.session_state:
