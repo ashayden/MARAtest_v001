@@ -124,10 +124,49 @@ section[data-testid="stSidebar"] .streamlit-expanderContent {
 
 /* Chat messages */
 .stChatMessage {
-    background: var(--input-background);
-    border-radius: 15px;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
     padding: 1rem;
     margin-bottom: 1rem;
+    background: var(--input-background);
+    border-radius: 15px;
+}
+
+/* Align avatar with content */
+.stChatMessage .avatar {
+    flex-shrink: 0;
+    margin-top: 0.25rem;
+}
+
+/* Style expanders in chat messages */
+.stChatMessage .streamlit-expanderHeader {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    margin: 0 !important;
+    padding: 0.75rem 1rem !important;
+}
+
+/* Style suggestion buttons */
+.stChatMessage button {
+    width: 100%;
+    text-align: left;
+    margin: 0.5rem 0;
+    padding: 0.75rem 1rem;
+    background: var(--input-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.stChatMessage button:hover {
+    background: var(--hover-color);
+    border-color: var(--accent-color);
+}
+
+/* Ensure consistent spacing in expanders */
+.streamlit-expanderContent {
+    padding: 1rem !important;
 }
 
 /* Chat container */
@@ -975,32 +1014,26 @@ def chat_interface():
                     avatar = message.get("avatar", "🤖")
                     with st.chat_message("assistant", avatar=avatar):
                         if message["type"] == "initial_analysis":
-                            st.markdown("### Initial Analysis")
-                            st.markdown(message["content"])
+                            with st.expander("Initial Analysis", expanded=False):
+                                st.markdown(message["content"])
                         
                         elif message["type"] == "specialist":
-                            st.markdown(f"### {message['domain'].title()} Analysis")
-                            st.markdown(message["content"])
+                            with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
+                                st.markdown(message["content"])
                         
                         elif message["type"] == "synthesis":
-                            st.markdown("### Final Synthesis")
-                            st.markdown(message["content"])
+                            with st.expander("Final Synthesis", expanded=False):
+                                st.markdown(message["content"])
                         
                         elif message["type"] == "suggestions":
-                            st.markdown("### 🤔 Explore Further")
-                            cols = st.columns(3)
-                            button_styles = ["💡", "🔄", "🌟"]
-                            
-                            for idx, ((headline, full_question), style, col) in enumerate(zip(
-                                message["suggestions"],
-                                button_styles,
-                                cols
-                            )):
-                                with col:
+                            with st.expander("Explore Further", expanded=False):
+                                # Display each suggestion as a vertical button
+                                for idx, (headline, full_question) in enumerate(message["suggestions"]):
                                     if st.button(
-                                        f"{style} {headline}",
+                                        headline,
                                         key=f"suggestion_{idx}_{hash(str(message))}",
-                                        help=full_question
+                                        help=full_question,
+                                        use_container_width=True
                                     ):
                                         st.session_state.next_prompt = full_question
                                         st.rerun()
