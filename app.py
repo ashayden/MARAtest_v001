@@ -569,6 +569,9 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         else:
             domains = []
         
+        # Store domains in session state for persistence
+        st.session_state.current_domains = domains
+        
         # Process specialist responses
         if domains:
             # Create placeholders for each specialist
@@ -606,6 +609,11 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     # Update the response text in real-time
                     response_text.markdown(specialist_response)
                 
+                # Store specialist response in session state
+                if 'specialist_responses' not in st.session_state:
+                    st.session_state.specialist_responses = {}
+                st.session_state.specialist_responses[domain] = specialist_response
+                
                 specialist_responses.append({
                     'domain': domain,
                     'response': specialist_response
@@ -631,7 +639,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         # Clear progress indicator
         progress_text.empty()
         
-        # Add to history without specialist responses
+        # Add to history
         st.session_state.messages.append({
             'role': 'user',
             'content': prompt,
@@ -667,6 +675,7 @@ def chat_interface():
         
         # Create persistent containers
         chat_container = st.container()
+        specialist_container = st.container()  # Container for specialist responses
         input_container = st.container()
         
         # Chat history
@@ -730,14 +739,15 @@ def chat_interface():
                     response = process_with_orchestrator(orchestrator, prompt, files_data if files_data else None)
                     
                     if response:
+                        # Display assistant response
+                        st.chat_message("assistant").write(response)
+                        
                         # Generate new suggestions
                         st.session_state.suggestions = generate_suggestions(response)
+                        display_suggestions()
                         
                         # Update file uploader key to clear files
                         st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
-                        
-                        # Clear input
-                        st.rerun()
                         
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
