@@ -60,13 +60,14 @@ class BaseAgent:
         
         # Add previous agent responses if any
         if previous_responses:
-            # Ensure all responses are strings
+            # Filter out None values and ensure all responses are strings
             formatted_responses = []
             for resp in previous_responses:
-                if isinstance(resp, dict):
-                    formatted_responses.append(resp.get('content', ''))
-                elif isinstance(resp, str):
-                    formatted_responses.append(resp)
+                if resp is not None:
+                    if isinstance(resp, dict):
+                        formatted_responses.append(str(resp.get('content', '')))
+                    else:
+                        formatted_responses.append(str(resp))
             
             if formatted_responses:
                 prompt.append({
