@@ -471,9 +471,57 @@ def prepare_messages(text_input: str, files_data: list = None) -> list:
         
     return parts
 
+def how_it_works_sidebar():
+    """Add How it Works section to sidebar."""
+    with st.sidebar:
+        with st.expander("ℹ️ How it Works", expanded=False):
+            st.markdown("""
+            ### Multi-Agent Response Architecture
+            
+            #### Core Components
+            1. **Initializer Agent** (Fixed Settings)
+               - Analyzes input to identify required expertise
+               - Determines which specialists to consult
+               - Provides initial context framework
+            
+            2. **Domain Specialists** (Adjustable Settings)
+               - Created dynamically based on input
+               - Expertise determined in real-time
+               - Controlled by sidebar model settings
+               - Provide domain-specific insights
+            
+            3. **Synthesis Agent** (Fixed Settings)
+               - Integrates all specialist responses
+               - Creates cohesive final report
+               - Maintains consistent structure
+            
+            #### Workflow
+            1. User submits query/content
+            2. Initializer analyzes and identifies needed expertise
+            3. Relevant specialists are created/activated
+            4. Each specialist provides domain insights
+            5. Synthesis agent creates final structured report
+            
+            #### Dynamic Specialist Control
+            - **Creativity Level**: Influences specialist response creativity
+            - **Response Diversity**: Controls response variation
+            - **Choice Range**: Affects word selection breadth
+            - **Maximum Length**: Sets response length limit
+            
+            #### Features
+            - Real-time streaming responses
+            - Collapsible specialist insights
+            - Multi-modal input support
+            - Persistent chat history
+            """)
+
 def model_settings_sidebar():
     """Sidebar for model settings."""
     with st.sidebar:
+        # Add How it Works section
+        how_it_works_sidebar()
+        
+        # Model Settings section
         with st.expander("⚙️ Model Settings", expanded=True):
             st.subheader("🔬 Domain Specialist Settings")
             st.info("""
