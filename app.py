@@ -229,7 +229,7 @@ def initialize_session_state():
         'top_p': 0.95,
         'top_k': 40,
         'max_output_tokens': 2048,
-        'specialist_responses': {},  # Changed from list to dict
+        'specialist_responses': {},  # Initialize as empty dictionary
         'current_analysis': None     # Store current analysis
     }
     
@@ -609,7 +609,6 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
     try:
         # Prepare messages
         parts = prepare_messages(prompt, files_data)
-        specialist_responses = []
         
         # Create containers for dynamic updates
         progress_text = st.empty()
@@ -638,6 +637,13 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         
         # Store domains in session state for persistence
         st.session_state.current_domains = domains
+        
+        # Initialize specialist_responses as dictionary if not already
+        if not isinstance(st.session_state.specialist_responses, dict):
+            st.session_state.specialist_responses = {}
+        
+        # Store initial analysis
+        st.session_state.specialist_responses['initial_analysis'] = initial_response
         
         # Process specialist responses
         if domains:
@@ -668,24 +674,21 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                         with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
                             response_text = st.empty()
                     
+                    previous_responses = [initial_response]
+                    previous_responses.extend(st.session_state.specialist_responses.get(d, "") for d in domains if d != domain)
+                    
                     for chunk in orchestrator.agents[domain].generate_response(
                         parts,
-                        previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
+                        previous_responses=previous_responses,
                         stream=True
                     ):
                         specialist_response += chunk
                         # Update the response text in real-time
                         response_text.markdown(specialist_response)
                     
-                    # Store specialist response in session state
-                    if 'specialist_responses' not in st.session_state:
-                        st.session_state.specialist_responses = {}
+                    # Store specialist response in session state dictionary
                     st.session_state.specialist_responses[domain] = specialist_response
                     
-                    specialist_responses.append({
-                        'domain': domain,
-                        'response': specialist_response
-                    })
                 except Exception as e:
                     with error_container:
                         st.error(f"Error with {domain} specialist: {str(e)}")
@@ -702,13 +705,19 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         """, unsafe_allow_html=True)
         
         synthesis = ""
+        previous_responses = [initial_response]
+        previous_responses.extend(st.session_state.specialist_responses.get(d, "") for d in domains)
+        
         for chunk in orchestrator.agents['reasoner'].generate_response(
             parts,
-            previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
+            previous_responses=previous_responses,
             stream=True
         ):
             if chunk:
                 synthesis += chunk
+        
+        # Store synthesis in session state
+        st.session_state.specialist_responses['final_synthesis'] = synthesis
         
         # Clear progress indicator
         progress_text.empty()

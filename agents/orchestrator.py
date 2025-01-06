@@ -180,8 +180,8 @@ class AgentOrchestrator:
             # Identify needed specialists
             domains = self.identify_required_specialists(input_text)
             
-            # Collect specialist responses
-            specialist_responses = []
+            # Initialize specialist responses as dictionary
+            specialist_responses = {'initial_analysis': initial_response}
             previous_responses = [initial_response]  # Start with initial analysis
             
             for domain in domains:
@@ -201,19 +201,24 @@ class AgentOrchestrator:
                     if stream:
                         yield chunk
                 
-                # Add this specialist's response to the list
-                specialist_responses.append(specialist_response)
+                # Store in dictionary
+                specialist_responses[domain] = specialist_response
                 previous_responses.append(specialist_response)
             
             # Start final synthesis
             yield "\n### FINAL_SYNTHESIS:\n"
+            synthesis_response = ""
             for chunk in self.agents['reasoner'].generate_response(
                 normalized_input,
                 previous_responses=previous_responses,  # Pass all responses including initial
                 stream=True
             ):
+                synthesis_response += chunk
                 if stream:
                     yield chunk
+            
+            # Add synthesis to responses
+            specialist_responses['final_synthesis'] = synthesis_response
         
         except Exception as e:
             yield f"Error in agent collaboration: {str(e)}" 
