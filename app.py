@@ -229,7 +229,7 @@ def initialize_session_state():
         'top_p': 0.95,
         'top_k': 40,
         'max_output_tokens': 2048,
-        'specialist_responses': [],  # Store specialist responses
+        'specialist_responses': {},  # Changed from list to dict
         'current_analysis': None     # Store current analysis
     }
     
