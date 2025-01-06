@@ -119,17 +119,14 @@ st.markdown("""
 .stChatInput {
     position: fixed;
     bottom: 0;
-    left: 0;
-    right: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    max-width: calc(100% - 650px);
     padding: 1rem 2rem;
     background-color: #1a1a1a;
     border-top: 1px solid #404040;
     z-index: 999;
-}
-
-.stChatInput > div {
-    max-width: 800px !important;  /* Narrower width for better readability */
-    margin: 0 auto !important;
 }
 
 .stChatInput textarea {
@@ -144,16 +141,6 @@ st.markdown("""
 .stChatInput textarea:focus {
     border-color: #4CAF50 !important;
     box-shadow: 0 0 0 1px #4CAF50 !important;
-}
-
-/* File uploader */
-[data-testid="stFileUploader"] {
-    width: auto !important;
-}
-
-[data-testid="stFileUploader"] button {
-    padding: 0.5rem !important;
-    border-radius: 6px !important;
 }
 
 /* Buttons */
@@ -178,6 +165,18 @@ header {visibility: hidden;}
 /* Ensure content doesn't go behind input */
 .main .block-container {
     padding-bottom: 100px !important;
+}
+
+/* Remove collapsible container styling */
+[data-testid="stExpander"] {
+    border: none !important;
+    box-shadow: none !important;
+    background-color: transparent !important;
+}
+
+[data-testid="stExpanderContent"] {
+    border: none !important;
+    padding: 0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -788,13 +787,6 @@ def display_message(message: dict):
     if role == 'user':
         with st.chat_message("user"):
             st.markdown(content)
-            if message.get("files_data"):
-                for file_data in message["files_data"]:
-                    if file_data["type"] == "image":
-                        st.image(file_data["display_data"])
-                    elif file_data["type"] == "text":
-                        with st.expander(f"📄 {file_data['name']}", expanded=False):
-                            st.text(file_data["data"])
     
     elif role == 'assistant':
         avatar = message.get("avatar", "🤖")
