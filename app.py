@@ -499,6 +499,45 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
     position: relative;
     padding-right: 2.5rem;
 }
+
+/* Sidebar styling */
+section[data-testid="stSidebar"] {
+    background-color: var(--background-color);
+    padding: 1rem;
+    width: 350px !important;
+}
+
+section[data-testid="stSidebar"] > div {
+    background-color: var(--background-color);
+    padding: 0 !important;
+}
+
+/* Sidebar expander styling */
+section[data-testid="stSidebar"] .streamlit-expanderHeader {
+    background-color: var(--input-background) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    padding: 1rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+section[data-testid="stSidebar"] .streamlit-expanderContent {
+    border: none !important;
+    padding: 1rem !important;
+}
+
+/* Sidebar slider styling */
+section[data-testid="stSidebar"] .stSlider > div {
+    margin-bottom: 1rem !important;
+}
+
+/* Sidebar info box styling */
+section[data-testid="stSidebar"] .stAlert {
+    margin-top: 1rem !important;
+    margin-bottom: 1rem !important;
+    padding: 0.75rem !important;
+    border-radius: 8px !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -910,17 +949,20 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         # Prepare messages
         parts = prepare_messages(prompt, files_data)
         
-        # Progress indicators
-        progress = st.empty()
+        # Create placeholders
+        progress_placeholder = st.empty()
         error_container = st.empty()
         
+        def update_progress(message):
+            progress_placeholder.markdown(f"""
+            <div class="processing-message">
+                <div class="spinner"></div>
+                <span>{message}</span>
+            </div>
+            """, unsafe_allow_html=True)
+        
         # Get initial analysis
-        progress.markdown("""
-        <div class="processing-message">
-            <div class="spinner"></div>
-            <span>Performing initial analysis...</span>
-        </div>
-        """, unsafe_allow_html=True)
+        update_progress("Performing initial analysis...")
         
         initial_response = ""
         for chunk in orchestrator.agents['initializer'].generate_response(parts, stream=True):
@@ -936,7 +978,10 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 "avatar": "🎯"
             }
             st.session_state.messages.append(initial_message)
-            st.rerun()  # Force update to display initial analysis
+            
+            # Force display update but maintain progress indicator
+            with st.empty():
+                st.rerun()
         
         # Extract text content for specialist identification
         text_content = ""
@@ -945,6 +990,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 text_content += part['text'] + "\n"
         
         # Identify required specialists
+        update_progress("Identifying required specialists...")
         domains = orchestrator.identify_required_specialists(text_content.strip())
         st.session_state.current_domains = domains
         
@@ -954,12 +1000,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         if domains:
             for domain in domains:
                 try:
-                    progress.markdown(f"""
-                    <div class="processing-message">
-                        <div class="spinner"></div>
-                        <span>Consulting {domain.title()} specialist...</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    update_progress(f"Consulting {domain.title()} specialist...")
                     
                     if domain not in orchestrator.agents:
                         orchestrator.agents[domain] = orchestrator.create_specialist(domain)
@@ -968,7 +1009,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     specialist_response = ""
                     for chunk in orchestrator.agents[domain].generate_response(
                         parts,
-                        previous_responses=synthesis_inputs.copy(),  # Pass accumulated responses
+                        previous_responses=synthesis_inputs.copy(),
                         stream=True
                     ):
                         if chunk:
@@ -985,21 +1026,18 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                         }
                         st.session_state.messages.append(specialist_message)
                         synthesis_inputs.append({'text': specialist_response})
-                        st.rerun()  # Force update to display specialist response
+                        
+                        # Force display update but maintain progress indicator
+                        with st.empty():
+                            st.rerun()
                     
                 except Exception as e:
                     error_container.error(f"Error with {domain} specialist: {str(e)}")
-                    continue  # Continue with other specialists if one fails
+                    continue
         
         # Generate final synthesis
-        progress.markdown("""
-        <div class="processing-message">
-            <div class="spinner"></div>
-            <span>Synthesizing insights...</span>
-        </div>
-        """, unsafe_allow_html=True)
+        update_progress("Synthesizing insights...")
         
-        # Generate synthesis using accumulated responses
         synthesis = ""
         for chunk in orchestrator.agents['reasoner'].generate_response(
             parts,
@@ -1018,9 +1056,11 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 "avatar": "📊"
             }
             st.session_state.messages.append(synthesis_message)
-            st.rerun()  # Force update to display synthesis
+            with st.empty():
+                st.rerun()
             
             # Generate and display suggestions
+            update_progress("Generating follow-up questions...")
             try:
                 suggestions = generate_suggestions(synthesis)
                 if suggestions:
@@ -1031,12 +1071,13 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                         "avatar": "💡"
                     }
                     st.session_state.messages.append(suggestions_message)
-                    st.rerun()  # Force update to display suggestions
+                    with st.empty():
+                        st.rerun()
             except Exception as e:
                 error_container.error(f"Error generating suggestions: {str(e)}")
         
-        # Clear progress indicator
-        progress.empty()
+        # Clear progress indicator only after everything is complete
+        progress_placeholder.empty()
         return synthesis
         
     except Exception as e:
