@@ -79,11 +79,6 @@ st.markdown("""
 footer {visibility: hidden;}
 header {visibility: hidden;}
 
-/* Main container */
-.main {
-    padding-bottom: 100px;  /* Increased space for input */
-}
-
 /* Chat messages */
 .stChatMessage {
     background: var(--input-background);
@@ -92,8 +87,13 @@ header {visibility: hidden;}
     margin-bottom: 1rem;
 }
 
-/* Bottom input container */
-.bottom-container {
+/* Chat container */
+.chat-container {
+    margin-bottom: 140px;  /* Space for input area */
+}
+
+/* Input container */
+div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
     position: fixed;
     bottom: 0;
     left: 0;
@@ -101,38 +101,7 @@ header {visibility: hidden;}
     background: var(--background-color);
     border-top: 1px solid var(--border-color);
     padding: 1rem;
-}
-
-/* File upload area */
-.upload-area {
-    margin-bottom: 0.5rem;
-    padding: 0.5rem;
-    border-radius: 8px;
-    background: var(--input-background);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* File upload icon */
-.upload-icon {
-    display: inline-flex;
-    align-items: center;
-    color: var(--text-color);
-    opacity: 0.7;
-    margin-right: 0.5rem;
-}
-
-/* File upload text */
-.upload-text {
-    color: var(--text-color);
-    opacity: 0.7;
-    font-size: 0.9rem;
-}
-
-/* Chat input area */
-.input-area {
-    margin-top: 0.5rem;
+    z-index: 1000;
 }
 
 /* Style Streamlit's chat input */
@@ -144,19 +113,19 @@ header {visibility: hidden;}
     padding: 0 !important;
 }
 
-/* Style Streamlit's file uploader */
+/* Style file uploader */
 [data-testid="stFileUploader"] {
-    opacity: 0;
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    left: 0;
-    cursor: pointer;
+    padding: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
 }
 
 [data-testid="stFileUploader"] > div {
-    display: none;
+    padding: 0.5rem !important;
+}
+
+/* Ensure content doesn't get hidden */
+.main .block-container {
+    padding-bottom: 160px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -360,102 +329,92 @@ def chat_interface():
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
-    # Chat history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
-            if "file_data" in message:
-                if message["file_data"]["type"] == "image":
-                    st.image(message["file_data"]["display_data"])
-                elif message["file_data"]["type"] == "text":
-                    with st.expander("📄 View File Content"):
-                        st.text(message["file_data"]["data"])
+    # Container for chat history
+    with st.container():
+        # Chat history
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
+                if "file_data" in message:
+                    if message["file_data"]["type"] == "image":
+                        st.image(message["file_data"]["display_data"])
+                    elif message["file_data"]["type"] == "text":
+                        with st.expander("📄 View File Content"):
+                            st.text(message["file_data"]["data"])
     
-    # Bottom container for file upload and input
-    st.markdown('<div class="bottom-container">', unsafe_allow_html=True)
-    
-    # File upload area
-    st.markdown("""
-        <div class="upload-area">
-            <span class="upload-icon">📎</span>
-            <span class="upload-text">Click or drag files here</span>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    # File uploader (positioned over the upload area)
-    uploaded_file = st.file_uploader(
-        "",
-        type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-        label_visibility="collapsed",
-        key="file_uploader"
-    )
-    
-    # Chat input
-    prompt = st.chat_input("Message")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Handle input
-    if prompt:
-        # Process uploaded file
-        file_data = None
-        if uploaded_file:
-            file_data = process_file_upload(uploaded_file)
+    # Fixed input container at bottom
+    with st.container():
+        # File uploader
+        uploaded_file = st.file_uploader(
+            "📎 Attach files",
+            type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+            key="file_uploader"
+        )
+        
+        # Chat input
+        prompt = st.chat_input("Message")
+        
+        # Handle input
+        if prompt:
+            # Process uploaded file
+            file_data = None
+            if uploaded_file:
+                file_data = process_file_upload(uploaded_file)
+                if file_data:
+                    st.toast(f"📎 {file_data['name']} attached")
+            
+            # Display user message
+            st.chat_message("user").write(prompt)
             if file_data:
-                st.toast(f"📎 {file_data['name']} attached")
-        
-        # Display user message
-        st.chat_message("user").write(prompt)
-        if file_data:
-            if file_data["type"] == "image":
-                st.chat_message("user").image(file_data["display_data"])
-            else:
-                st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
-        
-        # Add to history
-        user_message = {
-            "role": "user",
-            "content": prompt,
-            "file_data": file_data
-        } if file_data else {
-            "role": "user",
-            "content": prompt
-        }
-        st.session_state.messages.append(user_message)
-        
-        try:
-            # Prepare messages
-            parts = prepare_messages(prompt, file_data)
-            
-            # Generate response
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            response = model.generate_content(
-                parts,
-                generation_config={
-                    'temperature': 0.7,
-                    'top_p': 0.95,
-                    'top_k': 40,
-                    'max_output_tokens': 2048,
-                }
-            )
-            
-            # Display response
-            with st.chat_message("assistant"):
-                st.write(response.text)
+                if file_data["type"] == "image":
+                    st.chat_message("user").image(file_data["display_data"])
+                else:
+                    st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
             
             # Add to history
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": response.text
-            })
+            user_message = {
+                "role": "user",
+                "content": prompt,
+                "file_data": file_data
+            } if file_data else {
+                "role": "user",
+                "content": prompt
+            }
+            st.session_state.messages.append(user_message)
             
-            # Clear input
-            st.rerun()
-            
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
-            if st.checkbox("Show detailed error"):
-                st.error("Full error details:", exc_info=True)
+            try:
+                # Prepare messages
+                parts = prepare_messages(prompt, file_data)
+                
+                # Generate response
+                model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                response = model.generate_content(
+                    parts,
+                    generation_config={
+                        'temperature': 0.7,
+                        'top_p': 0.95,
+                        'top_k': 40,
+                        'max_output_tokens': 2048,
+                    }
+                )
+                
+                # Display response
+                with st.chat_message("assistant"):
+                    st.write(response.text)
+                
+                # Add to history
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response.text
+                })
+                
+                # Clear input
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+                if st.checkbox("Show detailed error"):
+                    st.error("Full error details:", exc_info=True)
 
 if __name__ == "__main__":
     # Load environment variables
