@@ -60,9 +60,18 @@ class BaseAgent:
         
         # Add previous agent responses if any
         if previous_responses:
-            prompt.append({
-                'text': "\nPrevious agent insights:\n" + "\n".join(previous_responses)
-            })
+            # Ensure all responses are strings
+            formatted_responses = []
+            for resp in previous_responses:
+                if isinstance(resp, dict):
+                    formatted_responses.append(resp.get('content', ''))
+                elif isinstance(resp, str):
+                    formatted_responses.append(resp)
+            
+            if formatted_responses:
+                prompt.append({
+                    'text': "\nPrevious agent insights:\n" + "\n---\n".join(formatted_responses)
+                })
         
         # Normalize user input
         if isinstance(user_input, str):

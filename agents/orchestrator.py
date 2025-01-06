@@ -112,22 +112,37 @@ class AgentOrchestrator:
     
     def identify_required_specialists(self, input_text: str) -> List[str]:
         """Analyze input to determine required specialist expertise."""
-        # Ensure input_text is a string
-        if isinstance(input_text, dict) and 'text' in input_text:
-            input_text = input_text['text']
-        elif isinstance(input_text, list) and input_text and isinstance(input_text[0], dict) and 'text' in input_text[0]:
-            input_text = input_text[0]['text']
-        
-        prompt = f"""Analyze the following input and identify the key domains of expertise needed.
-        Return only the domain names, separated by commas.
-        
-        Input: {input_text}
-        
-        Required expertise:"""
-        
-        response = self.agents['initializer'].model.generate_content(prompt)
-        domains = [d.strip() for d in response.text.split(',')]
-        return domains
+        try:
+            # Ensure input_text is a string
+            if isinstance(input_text, dict) and 'text' in input_text:
+                input_text = input_text['text']
+            elif isinstance(input_text, list) and input_text and isinstance(input_text[0], dict) and 'text' in input_text[0]:
+                input_text = input_text[0]['text']
+            
+            prompt = f"""Analyze the following input and identify the key domains of expertise needed.
+            Return only the domain names, separated by commas. Keep domain names simple and lowercase.
+            Example: history, architecture, culture
+            
+            Input: {input_text}
+            
+            Required expertise:"""
+            
+            response = self.agents['initializer'].model.generate_content(prompt)
+            if not response.text:
+                return []
+            
+            # Clean and validate domains
+            domains = []
+            for domain in response.text.split(','):
+                domain = domain.strip().lower()
+                if domain:  # Only add non-empty domains
+                    domains.append(domain)
+            
+            return domains if domains else ['general']  # Fallback to general if no domains found
+            
+        except Exception as e:
+            print(f"Error identifying specialists: {str(e)}")
+            return ['general']  # Fallback to general specialist on error
     
     def process_input(self, user_input: list, stream: bool = True) -> Generator[str, None, None]:
         """Process input through the collaborative agent system."""
