@@ -140,7 +140,7 @@ class AgentOrchestrator:
                 if stream:
                     yield chunk
             
-            # Identify needed specialists
+            # Extract text from input for specialist identification
             input_text = user_input
             if isinstance(user_input, list) and user_input:
                 if isinstance(user_input[0], dict) and 'text' in user_input[0]:
@@ -163,22 +163,28 @@ class AgentOrchestrator:
                 # Mark start of specialist response
                 yield f"\n### SPECIALIST: {domain}\n"
                 
+                # Ensure consistent input format for specialist
+                specialist_input = [{'text': input_text}] if isinstance(input_text, str) else user_input
+                
                 specialist_response = ""
                 for chunk in self.agents[domain].generate_response(
-                    user_input,
-                    previous_responses=[initial_response] + specialist_responses,
+                    specialist_input,
+                    previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
                     stream=True
                 ):
                     specialist_response += chunk
                     if stream:
                         yield chunk
-                specialist_responses.append(specialist_response)
+                specialist_responses.append({
+                    'domain': domain,
+                    'response': specialist_response
+                })
             
             # Start final synthesis
             yield "\n### FINAL_SYNTHESIS:\n"
             for chunk in self.agents['reasoner'].generate_response(
                 user_input,
-                previous_responses=[initial_response] + specialist_responses,
+                previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
                 stream=True
             ):
                 if stream:
