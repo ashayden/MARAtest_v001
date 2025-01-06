@@ -101,39 +101,83 @@ header {visibility: hidden;}
     background: var(--background-color);
     border-top: 1px solid var(--border-color);
     padding: 1rem;
+    display: flex;
+    align-items: center;
 }
 
 /* Hide default Streamlit file uploader */
 [data-testid="stFileUploader"] {
-    display: none;
+    opacity: 0;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    z-index: 1;
 }
 
-/* File upload button */
+/* File upload area */
+.file-upload-area {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-right: 10px;
+}
+
+/* File button (paperclip icon) */
 .file-button {
-    position: absolute;
-    left: 20px;
-    bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
     background: none;
     border: none;
     color: var(--text-color);
     opacity: 0.7;
     cursor: pointer;
-    font-size: 20px;
-    z-index: 100;
-    padding: 5px;
+    font-size: 18px;
+    transition: opacity 0.2s;
+    z-index: 0;
 }
 
 .file-button:hover {
     opacity: 1;
 }
 
+/* Drag and drop overlay */
+.drag-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.drag-overlay.active {
+    display: flex;
+}
+
+.drag-overlay-content {
+    padding: 2rem;
+    background: var(--input-background);
+    border-radius: 15px;
+    border: 2px dashed var(--border-color);
+    text-align: center;
+}
+
 /* Chat input styling */
 .stChatInput {
     margin-bottom: 0 !important;
+    flex-grow: 1;
 }
 
 .stChatInput > div {
-    padding-left: 40px !important;
+    padding-left: 0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -348,10 +392,27 @@ def chat_interface():
                     with st.expander("📄 View File Content"):
                         st.text(message["file_data"]["data"])
     
-    # Input area
+    # Add drag and drop overlay
+    st.markdown("""
+        <div class="drag-overlay">
+            <div class="drag-overlay-content">
+                <h3>Drop your file here</h3>
+                <p>Release to upload</p>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Input area with improved file upload
     st.markdown('<div class="input-area">', unsafe_allow_html=True)
     
-    # File upload (hidden but functional)
+    # File upload area with paperclip
+    st.markdown("""
+        <div class="file-upload-area">
+            <button class="file-button" title="Upload file">📎</button>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # File uploader (hidden but functional)
     uploaded_file = st.file_uploader(
         "",
         type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
@@ -359,13 +420,55 @@ def chat_interface():
         key="file_uploader"
     )
     
-    # File button
-    st.markdown('<button class="file-button" title="Upload file">📎</button>', unsafe_allow_html=True)
-    
     # Chat input
     prompt = st.chat_input("Message")
     
     st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Add JavaScript for drag and drop functionality
+    st.markdown("""
+        <script>
+            const dragOverlay = document.querySelector('.drag-overlay');
+            const dropZone = document.body;
+            
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            // Handle drag enter
+            dropZone.addEventListener('dragenter', function(e) {
+                dragOverlay.classList.add('active');
+            });
+            
+            // Handle drag leave
+            dropZone.addEventListener('dragleave', function(e) {
+                if (!e.relatedTarget || !dropZone.contains(e.relatedTarget)) {
+                    dragOverlay.classList.remove('active');
+                }
+            });
+            
+            // Handle drop
+            dropZone.addEventListener('drop', function(e) {
+                dragOverlay.classList.remove('active');
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files.length) {
+                    const fileInput = document.querySelector('input[type="file"]');
+                    if (fileInput) {
+                        fileInput.files = files;
+                        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            });
+        </script>
+    """, unsafe_allow_html=True)
     
     # Handle input
     if prompt:
