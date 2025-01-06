@@ -173,11 +173,12 @@ Avoid:
         )
         
         # Create and return the specialist agent
-        return BaseAgent(
-            name=f"{domain}_specialist",
-            system_prompt=specialized_prompt,
-            config=self.config
+        specialist = BaseAgent(
+            config=self.config,
+            role=f"{domain}_specialist"
         )
+        specialist.system_prompt = specialized_prompt
+        return specialist
     
     def identify_required_specialists(self, input_text: str) -> List[str]:
         """Analyze input to determine required specialist expertise."""
