@@ -1,165 +1,113 @@
+"""Base template for collaborative agents."""
+from typing import Optional, Generator, List
 import google.generativeai as genai
-from typing import Optional, Dict, Any, Callable, List
-from abc import ABC, abstractmethod
-from datetime import datetime
-from .config import AgentConfig, AgentMode, ResponseFormat
 
-class AgentTemplate(ABC):
-    """Abstract base template for creating specialized AI agents."""
+class AgentConfig:
+    """Configuration for agents."""
+    def __init__(self, temperature: float = 0.7, top_p: float = 0.95,
+                 top_k: int = 40, max_output_tokens: int = 2048):
+        self.temperature = temperature
+        self.top_p = top_p
+        self.top_k = top_k
+        self.max_output_tokens = max_output_tokens
+
+class BaseAgent:
+    """Base agent with collaborative capabilities."""
     
-    def __init__(self, config: Optional[AgentConfig] = None):
-        """Initialize the agent template with configuration."""
-        self.config = config or AgentConfig()
-        self.model = genai.GenerativeModel(self.config.model_name)
+    def __init__(self, config: AgentConfig, role: str = "base"):
+        """Initialize the base agent."""
+        self.config = config
+        self.role = role
+        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.conversation_history = []
         
-        # Set up generation configuration
-        self.generation_config = {
-            'temperature': self.config.temperature,
-            'top_p': 0.95,
-            'top_k': 40,
-            'max_output_tokens': self.config.max_tokens,
-        }
+        # Base system prompt
+        self.system_prompt = """You are a collaborative AI agent working as part of a multi-agent system.
+        Your role is to:
+        1. Analyze inputs thoroughly
+        2. Apply your specialized expertise
+        3. Consider how your insights complement other agents
+        4. Provide clear reasoning for your contributions
+        5. Format responses for easy integration
         
-        # Initialize memory if enabled
-        self.conversation_history: List[Dict[str, Any]] = [] if self.config.enable_memory else None
-        
-        # Initialize knowledge base if enabled
-        if self.config.enable_knowledge_base and self.config.knowledge_base_path:
-            self.initialize_knowledge_base()
-    
-    def initialize_knowledge_base(self):
-        """Initialize knowledge base if configured."""
-        # Implement knowledge base initialization
-        pass
-    
-    def format_prompt(self, user_input: str) -> str:
-        """Format the prompt with appropriate context and instructions."""
-        # Start with base prompt
-        formatted_prompt = f"""
-        Agent Name: {self.config.name}
-        Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S') if self.config.include_timestamps else ''}
-        Mode: {self.config.mode.value}
-        
-        Instructions:
-        {self.config.custom_instructions or self.get_default_instructions()}
-        
-        Previous Context:
-        {self.get_conversation_context() if self.config.enable_memory else ''}
-        
-        Current Query:
-        {user_input}
-        
-        Response Template:
-        {self.config.get_template(self.config.mode.value)}
+        Remember:
+        - You are part of a team of specialized agents
+        - Each contribution should build on previous insights
+        - Be explicit about your reasoning process
+        - Highlight areas where other agents should focus
         """
+    
+    def add_to_history(self, message: dict):
+        """Add a message to the conversation history."""
+        self.conversation_history.append(message)
+    
+    def get_history(self):
+        """Get the conversation history."""
+        return self.conversation_history
+    
+    def clear_history(self):
+        """Clear the conversation history."""
+        self.conversation_history = []
+    
+    def prepare_prompt(self, user_input: list, previous_responses: List[str] = None) -> list:
+        """Prepare the complete prompt with system context, history, and previous agent responses."""
+        # Start with system prompt
+        prompt = [{'text': self.system_prompt}]
         
-        return formatted_prompt
-    
-    def get_default_instructions(self) -> str:
-        """Get default instructions based on mode."""
-        mode_instructions = {
-            AgentMode.CHAT: """
-                Provide clear, conversational responses while maintaining professionalism.
-                Focus on direct answers and relevant information.
-            """,
-            AgentMode.ANALYSIS: """
-                Conduct thorough analysis with supporting evidence.
-                Present findings in a structured, logical manner.
-            """,
-            AgentMode.REPORT: """
-                Generate comprehensive reports with clear sections.
-                Include executive summary, analysis, and recommendations.
-            """,
-            AgentMode.CALCULATION: """
-                Show all calculations clearly with explanations.
-                Include units and assumptions where relevant.
-            """
-        }
-        return mode_instructions.get(self.config.mode, mode_instructions[AgentMode.CHAT])
-    
-    def get_conversation_context(self) -> str:
-        """Get relevant conversation history."""
-        if not self.conversation_history:
-            return ""
+        # Add conversation history
+        for msg in self.conversation_history:
+            prompt.append(msg)
         
-        recent_history = self.conversation_history[-self.config.memory_window_size:]
-        return "\n".join([
-            f"User: {msg['user']}\nAssistant: {msg['assistant']}"
-            for msg in recent_history
-        ])
-    
-    def update_conversation_history(self, user_input: str, response: str):
-        """Update conversation history if memory is enabled."""
-        if self.config.enable_memory:
-            self.conversation_history.append({
-                'user': user_input,
-                'assistant': response,
-                'timestamp': datetime.now().isoformat()
+        # Add previous agent responses if any
+        if previous_responses:
+            prompt.append({
+                'text': "\nPrevious agent insights:\n" + "\n".join(previous_responses)
             })
+        
+        # Add current user input
+        prompt.extend(user_input)
+        
+        return prompt
     
-    def format_response(self, response: str) -> str:
-        """Format the response according to configuration."""
-        if self.config.response_format == ResponseFormat.HTML:
-            # Convert markdown to HTML if needed
-            return self.markdown_to_html(response)
-        elif self.config.response_format == ResponseFormat.PLAIN:
-            # Strip formatting if plain text is requested
-            return self.strip_formatting(response)
-        return response
-    
-    @staticmethod
-    def markdown_to_html(markdown: str) -> str:
-        """Convert markdown to HTML."""
-        # Implement markdown to HTML conversion
-        return markdown  # Placeholder
-    
-    @staticmethod
-    def strip_formatting(text: str) -> str:
-        """Remove formatting from text."""
-        # Implement formatting removal
-        return text  # Placeholder
-    
-    def generate_response(
-        self, 
-        prompt: str,
-        stream: bool = False,
-        stream_callback: Optional[Callable[[str], None]] = None
-    ) -> str:
-        """Generate a response using the configured model and prompts."""
+    def generate_response(self, user_input: list, previous_responses: List[str] = None, stream: bool = True) -> Generator[str, None, None]:
+        """Generate a response to the input, considering previous agent responses."""
         try:
-            # Format the prompt
-            formatted_prompt = self.format_prompt(prompt)
+            # Prepare complete prompt
+            prompt = self.prepare_prompt(user_input, previous_responses)
             
-            if stream and stream_callback and self.config.enable_streaming:
-                # Stream response with callback
-                response_stream = self.model.generate_content(
-                    formatted_prompt,
-                    generation_config=self.generation_config,
-                    stream=True
-                )
-                
-                final_response = ""
-                for chunk in response_stream:
+            # Generate response
+            response = self.model.generate_content(
+                prompt,
+                generation_config={
+                    'temperature': self.config.temperature,
+                    'top_p': self.config.top_p,
+                    'top_k': self.config.top_k,
+                    'max_output_tokens': self.config.max_output_tokens,
+                },
+                stream=stream
+            )
+            
+            if stream:
+                full_response = ""
+                for chunk in response:
                     if chunk.text:
-                        final_response += chunk.text
-                        stream_callback(chunk.text)
+                        full_response += chunk.text
+                        yield chunk.text
                 
-                formatted_response = self.format_response(final_response)
-                self.update_conversation_history(prompt, formatted_response)
-                return formatted_response
+                # Add to history with role context
+                self.add_to_history({
+                    'role': 'assistant',
+                    'agent': self.role,
+                    'content': full_response
+                })
             else:
-                # Generate complete response
-                response = self.model.generate_content(
-                    formatted_prompt,
-                    generation_config=self.generation_config
-                )
-                
-                formatted_response = self.format_response(response.text)
-                self.update_conversation_history(prompt, formatted_response)
-                return formatted_response
+                # Add to history with role context
+                self.add_to_history({
+                    'role': 'assistant',
+                    'agent': self.role,
+                    'content': response.text
+                })
+                yield response.text
             
         except Exception as e:
-            error_msg = f"Error generating response: {str(e)}"
-            if stream_callback:
-                stream_callback(error_msg)
-            return error_msg 
+            yield f"Error generating response: {str(e)}" 
