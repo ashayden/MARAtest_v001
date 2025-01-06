@@ -138,6 +138,8 @@ def initialize_session_state():
         st.session_state.agent = ResponseAgent()
     if 'suggestions' not in st.session_state:
         st.session_state.suggestions = []
+    if 'clear_files' not in st.session_state:
+        st.session_state.clear_files = False
 
 def convert_to_pdf(content: str) -> Optional[bytes]:
     """Convert content to PDF format."""
@@ -352,8 +354,12 @@ def chat_interface():
             "📎 Attach files",
             type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
             accept_multiple_files=True,
-            key="file_uploader"
+            key="file_uploader" if not st.session_state.clear_files else f"file_uploader_{time.time()}"
         )
+        
+        # Reset clear_files flag
+        if st.session_state.clear_files:
+            st.session_state.clear_files = False
         
         # Chat input
         prompt = st.chat_input("Message")
@@ -414,6 +420,9 @@ def chat_interface():
                     "role": "assistant",
                     "content": response.text
                 })
+                
+                # Set flag to clear files
+                st.session_state.clear_files = True
                 
                 # Clear input
                 st.rerun()
