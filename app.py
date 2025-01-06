@@ -353,6 +353,7 @@ def initialize_session_state():
         'top_k': 40,
         'max_output_tokens': 2048,
         'specialist_responses': {},  # Initialize as empty dictionary
+        'current_domains': [],       # Initialize as empty list
         'current_analysis': None     # Store current analysis
     }
     
@@ -740,6 +741,10 @@ def get_orchestrator():
 def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None):
     """Process input through the collaborative agent system."""
     try:
+        # Clear previous responses at the start of each new request
+        st.session_state.specialist_responses = {}
+        st.session_state.current_domains = []
+        
         # Prepare messages
         parts = prepare_messages(prompt, files_data)
         
@@ -985,29 +990,34 @@ def chat_interface():
                     with st.container():
                         # Store all responses in order
                         responses_to_display = []
+                        seen_domains = set()  # Track which domains we've already displayed
                         
                         # 1. Initial Analysis (always first)
-                        if 'initial_analysis' in st.session_state.specialist_responses:
+                        initial_analysis = st.session_state.specialist_responses.get('initial_analysis')
+                        if initial_analysis:
                             responses_to_display.append({
                                 'title': "🎯 Initial Analysis",
-                                'content': st.session_state.specialist_responses['initial_analysis']
+                                'content': initial_analysis
                             })
                         
                         # 2. Domain Specialists (in order they were called)
                         if 'current_domains' in st.session_state:
                             for domain in st.session_state.current_domains:
-                                if domain in st.session_state.specialist_responses:
+                                # Only add each domain once
+                                if domain not in seen_domains and domain in st.session_state.specialist_responses:
                                     responses_to_display.append({
                                         'title': f"🔍 {domain.title()} Analysis",
                                         'content': st.session_state.specialist_responses[domain]
                                     })
+                                    seen_domains.add(domain)
                         
                         # 3. Final Synthesis (always last)
-                        responses_to_display.append({
-                            'title': "📊 Final Synthesis",
-                            'content': message["content"],
-                            'is_synthesis': True
-                        })
+                        if message.get("content"):  # Only add if there's content
+                            responses_to_display.append({
+                                'title': "📊 Final Synthesis",
+                                'content': message["content"],
+                                'is_synthesis': True
+                            })
                         
                         # Display all responses in order
                         for response in responses_to_display:
