@@ -71,9 +71,36 @@ except ImportError:
     ```
     """)
 
-# Custom CSS for modern chat interface
+# Update the page config at the start of the file, before any other Streamlit calls
+st.set_page_config(
+    page_title="AI Assistant",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items=None
+)
+
+# Update the CSS for width control
 st.markdown("""
 <style>
+/* Layout width control */
+.block-container {
+    padding-top: 1rem !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    max-width: 95% !important;
+}
+
+/* Sidebar width */
+section[data-testid="stSidebar"] {
+    width: 24rem !important;
+}
+
+/* Main content area */
+.main > div {
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+}
+
 /* Modern dark theme */
 :root {
     --background-color: #1a1a1a;
@@ -82,14 +109,6 @@ st.markdown("""
     --border-color: #404040;
     --accent-color: #4CAF50;
     --hover-color: #45a049;
-}
-
-/* Layout width control */
-.block-container {
-    max-width: 1400px !important;  /* Increased from 1200px */
-    padding-left: 5rem !important;
-    padding-right: 5rem !important;
-    padding-bottom: 200px !important;
 }
 
 /* Ensure content doesn't get hidden behind input */
@@ -551,16 +570,13 @@ def generate_suggestions(content: str) -> list:
     """Generate follow-up suggestions based on content."""
     prompt = f"""
     Based on the following content, generate exactly 3 follow-up questions that are:
-    1. A deeper dive into the most interesting specific aspect of the topic
-    2. An extension of the topic into related areas or broader implications
-    3. An unexpected or unique connection to another field or concept
+    1. A deeper dive into the most interesting specific aspect
+    2. An extension into related areas or implications
+    3. An unexpected connection to another field
     
-    For each question, also provide a short headline version (maximum 5-7 words) that captures the key idea.
-    Format as:
-    HEADLINE: [Short Version]
-    FULL: [Complete Question]
-    
-    Make each question thoughtful, specific, and directly related to the content.
+    Format each as:
+    HEADLINE: [5-7 word summary]
+    FULL: [Complete question]
     
     Content: {content}
     """
@@ -577,75 +593,47 @@ def generate_suggestions(content: str) -> list:
             }
         )
         
-        # Parse headlines and full questions
-        headlines = []
-        full_questions = []
+        suggestions = []
         current_headline = None
-        current_full = None
         
         for line in response.text.split('\n'):
             line = line.strip()
             if line.startswith('HEADLINE:'):
                 current_headline = line.replace('HEADLINE:', '').strip()
-            elif line.startswith('FULL:'):
-                current_full = line.replace('FULL:', '').strip()
-                if current_headline and current_full:
-                    headlines.append(current_headline)
-                    full_questions.append(current_full)
-                    current_headline = None
-                    current_full = None
+            elif line.startswith('FULL:') and current_headline:
+                full_question = line.replace('FULL:', '').strip()
+                suggestions.append((current_headline, full_question))
+                current_headline = None
         
-        # Ensure we have pairs of headlines and full questions
-        suggestions = list(zip(headlines[:3], full_questions[:3]))
-        return suggestions
+        return suggestions[:3]  # Ensure we return exactly 3 suggestions
+        
     except Exception as e:
         st.error(f"Error generating suggestions: {str(e)}")
         return []
 
-def display_suggestions():
-    """Display suggestion buttons."""
-    if st.session_state.suggestions:
-        st.markdown("---")  # Add separator
-        st.markdown("### 🤔 Explore Further")
-        
-        # Create three columns with equal width
-        cols = st.columns(3)
-        
-        # Define button styles for each type
-        button_styles = [
-            "💡",  # For deep dive
-            "🔄",  # For related topics
-            "🌟"   # For unexpected connections
-        ]
-        
-        # Display each suggestion in its own column
-        for idx, ((headline, full_question), style, col) in enumerate(zip(
-            st.session_state.suggestions,
-            button_styles,
-            cols
-        )):
-            with col:
-                # Create a container for the button
-                button_container = st.container()
-                with button_container:
-                    if st.button(
-                        f"{style} {headline}",
-                        key=f"suggestion_{idx}",
-                        help=full_question  # Show full question on hover
-                    ):
-                        st.session_state.next_prompt = full_question
-                        st.rerun()
-                    
-                    # Show truncated version of full question below button
-                    st.caption(full_question[:100] + "..." if len(full_question) > 100 else full_question)
-
 def copy_to_clipboard(text: str):
-    """Copy text to clipboard."""
-    try:
-        pyperclip.copy(text)
-        st.toast("Copied to clipboard!")
-    except Exception as e:
-        st.error(f"Error copying to clipboard: {str(e)}")
+    """Copy text to clipboard using JavaScript."""
+    # Create a JavaScript function to handle copying
+    js_code = f"""
+        <script>
+        async function copyToClipboard() {{
+            try {{
+                await navigator.clipboard.writeText({repr(text)});
+                window.streamlitMessageListener.handleMessage({{
+                    type: "streamlit:showToast",
+                    data: {{ message: "Copied to clipboard!", kind: "info" }}
+                }});
+            }} catch (err) {{
+                window.streamlitMessageListener.handleMessage({{
+                    type: "streamlit:showToast",
+                    data: {{ message: "Failed to copy to clipboard", kind: "error" }}
+                }});
+            }}
+        }}
+        copyToClipboard();
+        </script>
+    """
+    st.components.v1.html(js_code, height=0)
 
 def display_three_dot_menu(message: str):
     """Display three-dot menu with options."""
@@ -1036,16 +1024,19 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             }
             st.session_state.messages.append(synthesis_message)
             
-            # Generate and add suggestions
-            suggestions = generate_suggestions(synthesis)
-            if suggestions:
-                suggestions_message = {
-                    "role": "assistant",
-                    "type": "suggestions",
-                    "suggestions": suggestions,
-                    "avatar": "💡"
-                }
-                st.session_state.messages.append(suggestions_message)
+            # Generate suggestions based on synthesis
+            try:
+                suggestions = generate_suggestions(synthesis)
+                if suggestions:
+                    suggestions_message = {
+                        "role": "assistant",
+                        "type": "suggestions",
+                        "suggestions": suggestions,
+                        "avatar": "💡"
+                    }
+                    st.session_state.messages.append(suggestions_message)
+            except Exception as e:
+                st.error(f"Error generating suggestions: {str(e)}")
         
         # Clear progress indicator
         progress.empty()
@@ -1061,13 +1052,6 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
 def chat_interface():
     """Modern chat interface with minimal design."""
     try:
-        # Set page config for wider layout
-        st.set_page_config(
-            page_title="AI Assistant",
-            layout="wide",
-            initial_sidebar_state="expanded"
-        )
-        
         st.title("AI Assistant")
         initialize_session_state()
         model_settings_sidebar()
@@ -1094,67 +1078,8 @@ def chat_interface():
             messages_container = st.container()
             with messages_container:
                 for message in st.session_state.messages:
-                    if message["role"] == "user":
-                        with st.chat_message("user"):
-                            st.write(message["content"])
-                            if message.get("files_data"):
-                                for file_data in message["files_data"]:
-                                    if file_data["type"] == "image":
-                                        st.image(file_data["display_data"])
-                                    elif file_data["type"] == "text":
-                                        with st.expander(f"📄 {file_data['name']}", expanded=False):
-                                            st.text(file_data["data"])
-                    
-                    elif message["role"] == "assistant":
-                        avatar = message.get("avatar", "🤖")
-                        with st.chat_message("assistant", avatar=avatar):
-                            if message["type"] == "initial_analysis":
-                                col1, col2 = st.columns([20, 1])
-                                with col1:
-                                    with st.expander("Initial Analysis", expanded=False):
-                                        st.markdown(message["content"])
-                                with col2:
-                                    if st.button("⋮", key=f"menu_initial_{hash(str(message))}", help="Copy content"):
-                                        copy_to_clipboard(message["content"])
-                            
-                            elif message["type"] == "specialist":
-                                col1, col2 = st.columns([20, 1])
-                                with col1:
-                                    with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
-                                        st.markdown(message["content"])
-                                with col2:
-                                    if st.button("⋮", key=f"menu_specialist_{hash(str(message))}", help="Copy content"):
-                                        copy_to_clipboard(message["content"])
-                            
-                            elif message["type"] == "synthesis":
-                                col1, col2 = st.columns([20, 1])
-                                with col1:
-                                    with st.expander("Final Synthesis", expanded=True):
-                                        st.markdown(message["content"])
-                                with col2:
-                                    if st.button("⋮", key=f"menu_synthesis_{hash(str(message))}", help="Copy content"):
-                                        copy_to_clipboard(message["content"])
-                            
-                            elif message["type"] == "suggestions":
-                                st.markdown("")  # Add spacing
-                                st.markdown("### 🤔 Explore Further")
-                                for idx, (headline, full_question) in enumerate(message["suggestions"]):
-                                    col1, col2 = st.columns([20, 1])
-                                    with col1:
-                                        if st.button(
-                                            headline,
-                                            key=f"suggestion_{idx}_{hash(str(message))}",
-                                            help=full_question,
-                                            use_container_width=True
-                                        ):
-                                            st.session_state.next_prompt = full_question
-                                            st.rerun()
-                                    with col2:
-                                        if st.button("⋮", key=f"menu_suggestion_{idx}_{hash(str(message))}", help="Copy suggestion"):
-                                            copy_to_clipboard(f"{headline}\n{full_question}")
-            else:
-                st.markdown(message["content"])
-
+                    display_message(message)
+            
             # Process new input
             if prompt:
                 files_data = []
@@ -1186,6 +1111,7 @@ def chat_interface():
             if 'next_prompt' in st.session_state:
                 prompt = st.session_state.next_prompt
                 del st.session_state.next_prompt
+                st.rerun()
                 
     except Exception as e:
         st.error(f"Error in chat interface: {str(e)}")
