@@ -140,6 +140,17 @@ def initialize_session_state():
         st.session_state.suggestions = []
     if 'clear_files' not in st.session_state:
         st.session_state.clear_files = False
+    if 'file_uploader_key' not in st.session_state:
+        st.session_state.file_uploader_key = "file_uploader_0"
+    # Initialize model settings
+    if 'temperature' not in st.session_state:
+        st.session_state.temperature = 0.7
+    if 'top_p' not in st.session_state:
+        st.session_state.top_p = 0.95
+    if 'top_k' not in st.session_state:
+        st.session_state.top_k = 40
+    if 'max_output_tokens' not in st.session_state:
+        st.session_state.max_output_tokens = 2048
 
 def convert_to_pdf(content: str) -> Optional[bytes]:
     """Convert content to PDF format."""
@@ -325,6 +336,65 @@ def prepare_messages(text_input: str, files_data: list = None) -> list:
         
     return parts
 
+def model_settings_sidebar():
+    """Sidebar for model settings."""
+    with st.sidebar:
+        st.title("Model Settings")
+        
+        # Temperature slider
+        st.session_state.temperature = st.slider(
+            "Temperature",
+            min_value=0.0,
+            max_value=1.0,
+            value=st.session_state.temperature,
+            step=0.1,
+            help="Higher values make the output more creative but less focused"
+        )
+        
+        # Top P slider
+        st.session_state.top_p = st.slider(
+            "Top P",
+            min_value=0.0,
+            max_value=1.0,
+            value=st.session_state.top_p,
+            step=0.05,
+            help="Controls diversity via nucleus sampling"
+        )
+        
+        # Top K slider
+        st.session_state.top_k = st.slider(
+            "Top K",
+            min_value=1,
+            max_value=100,
+            value=st.session_state.top_k,
+            step=1,
+            help="Controls diversity via top-k sampling"
+        )
+        
+        # Max Output Tokens slider
+        st.session_state.max_output_tokens = st.slider(
+            "Max Output Length",
+            min_value=256,
+            max_value=4096,
+            value=st.session_state.max_output_tokens,
+            step=256,
+            help="Maximum length of the response"
+        )
+        
+        # Add a divider
+        st.divider()
+        
+        # Display current settings
+        st.write("Current Settings:")
+        settings = {
+            "Temperature": f"{st.session_state.temperature:.1f}",
+            "Top P": f"{st.session_state.top_p:.2f}",
+            "Top K": st.session_state.top_k,
+            "Max Tokens": st.session_state.max_output_tokens
+        }
+        for key, value in settings.items():
+            st.text(f"{key}: {value}")
+
 def chat_interface():
     """Modern chat interface with minimal design."""
     st.title("AI Assistant")
@@ -336,6 +406,9 @@ def chat_interface():
         st.session_state.clear_files = False
     if "file_uploader_key" not in st.session_state:
         st.session_state.file_uploader_key = "file_uploader_0"
+    
+    # Show model settings sidebar
+    model_settings_sidebar()
     
     # Container for chat history
     with st.container():
@@ -399,15 +472,15 @@ def chat_interface():
                 # Prepare messages with all files
                 parts = prepare_messages(prompt, files_data)
                 
-                # Generate response
+                # Generate response using current settings
                 model = genai.GenerativeModel('gemini-2.0-flash-exp')
                 response = model.generate_content(
                     parts,
                     generation_config={
-                        'temperature': 0.7,
-                        'top_p': 0.95,
-                        'top_k': 40,
-                        'max_output_tokens': 2048,
+                        'temperature': st.session_state.temperature,
+                        'top_p': st.session_state.top_p,
+                        'top_k': st.session_state.top_k,
+                        'max_output_tokens': st.session_state.max_output_tokens,
                     }
                 )
                 
