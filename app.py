@@ -200,8 +200,12 @@ def generate_suggestions(content: str) -> list:
     2. An extension of the topic into related areas or broader implications
     3. An unexpected or unique connection to another field or concept
     
+    For each question, also provide a short headline version (maximum 5-7 words) that captures the key idea.
+    Format as:
+    HEADLINE: [Short Version]
+    FULL: [Complete Question]
+    
     Make each question thoughtful, specific, and directly related to the content.
-    Format each question as a complete, natural question without category labels or prefixes.
     
     Content: {content}
     """
@@ -217,14 +221,28 @@ def generate_suggestions(content: str) -> list:
                 'max_output_tokens': 1024,
             }
         )
-        # Clean and format suggestions
-        suggestions = []
+        
+        # Parse headlines and full questions
+        headlines = []
+        full_questions = []
+        current_headline = None
+        current_full = None
+        
         for line in response.text.split('\n'):
             line = line.strip()
-            # Skip empty lines and lines that start with numbers or category labels
-            if line and not line.startswith(('1.', '2.', '3.', 'A deeper', 'An extension', 'An unexpected')):
-                suggestions.append(line)
-        return suggestions[:3]  # Ensure we only return 3 suggestions
+            if line.startswith('HEADLINE:'):
+                current_headline = line.replace('HEADLINE:', '').strip()
+            elif line.startswith('FULL:'):
+                current_full = line.replace('FULL:', '').strip()
+                if current_headline and current_full:
+                    headlines.append(current_headline)
+                    full_questions.append(current_full)
+                    current_headline = None
+                    current_full = None
+        
+        # Ensure we have pairs of headlines and full questions
+        suggestions = list(zip(headlines[:3], full_questions[:3]))
+        return suggestions
     except Exception as e:
         st.error(f"Error generating suggestions: {str(e)}")
         return []
@@ -239,18 +257,21 @@ def display_suggestions():
         
         # Define button styles for each type
         button_styles = [
-            "💡 Dig Deeper: ",  # For specific aspect
-            "🔄 Extend: ",      # For related topics
-            "🌟 Connect: "      # For unexpected connections
+            "💡",  # For specific aspect
+            "🔄",  # For related topics
+            "🌟"   # For unexpected connections
         ]
         
         # Display each suggestion in its own column with styled prefix
-        for idx, (col, suggestion, style) in enumerate(zip([col1, col2, col3], 
-                                                         st.session_state.suggestions, 
-                                                         button_styles)):
+        for idx, (col, (headline, full_question), style) in enumerate(zip(
+            [col1, col2, col3], 
+            st.session_state.suggestions, 
+            button_styles
+        )):
             with col:
-                if st.button(f"{style}{suggestion}", key=f"suggestion_{idx}"):
-                    st.session_state.next_prompt = suggestion
+                if st.button(f"{style} {headline}", key=f"suggestion_{idx}"):
+                    # Use the full question when clicked
+                    st.session_state.next_prompt = full_question
                     st.rerun()
 
 def copy_to_clipboard(text: str):
