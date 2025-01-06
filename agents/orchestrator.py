@@ -167,6 +167,8 @@ class AgentOrchestrator:
             
             # Collect specialist responses
             specialist_responses = []
+            previous_responses = [initial_response]  # Start with initial analysis
+            
             for domain in domains:
                 if domain not in self.agents:
                     self.agents[domain] = self.create_specialist(domain)
@@ -177,22 +179,22 @@ class AgentOrchestrator:
                 specialist_response = ""
                 for chunk in self.agents[domain].generate_response(
                     normalized_input,
-                    previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
+                    previous_responses=previous_responses,  # Pass accumulated responses
                     stream=True
                 ):
                     specialist_response += chunk
                     if stream:
                         yield chunk
-                specialist_responses.append({
-                    'domain': domain,
-                    'response': specialist_response
-                })
+                
+                # Add this specialist's response to the list
+                specialist_responses.append(specialist_response)
+                previous_responses.append(specialist_response)
             
             # Start final synthesis
             yield "\n### FINAL_SYNTHESIS:\n"
             for chunk in self.agents['reasoner'].generate_response(
                 normalized_input,
-                previous_responses=[initial_response] + [r['response'] for r in specialist_responses],
+                previous_responses=previous_responses,  # Pass all responses including initial
                 stream=True
             ):
                 if stream:
