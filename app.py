@@ -88,158 +88,139 @@ except ImportError:
 # Core CSS for layout and theme
 st.markdown("""
 <style>
-/* Core theme variables */
-:root {
-    --background-color: #1a1a1a;
-    --input-background: #2d2d2d;
-    --text-color: #ffffff;
-    --border-color: #404040;
-    --accent-color: #4CAF50;
-    --hover-color: #45a049;
+/* Core theme and layout */
+.stApp {
+    max-width: 100%;
 }
 
-/* Main container width */
+/* Main container */
 .main .block-container {
-    max-width: 1400px !important;
-    padding: 2rem 4rem !important;
-    margin: 0 auto !important;
+    padding-top: 1rem;
+    padding-right: 3rem;
+    padding-left: 3rem;
+    padding-bottom: 1rem;
 }
 
-/* Sidebar styling - allow resizing */
+/* Sidebar */
 [data-testid="stSidebar"] {
-    background-color: var(--background-color);
-    padding: 2rem 1rem;
-    min-width: 18rem !important;
-    max-width: 35rem !important;
+    min-width: 18rem;
+    max-width: 35rem;
+    background-color: #1a1a1a;
 }
 
-[data-testid="stSidebar"] > div {
-    background-color: var(--background-color);
-    padding: 0 !important;
+[data-testid="stSidebar"] .block-container {
+    padding-top: 2rem;
+    padding-right: 1rem;
+    padding-left: 1rem;
+    padding-bottom: 2rem;
 }
 
-[data-testid="stSidebar"] .streamlit-expanderHeader {
-    background-color: var(--input-background) !important;
-    border: 1px solid var(--border-color) !important;
-    border-radius: 8px !important;
-    padding: 1.25rem !important;
-    margin: 0.75rem 0 !important;
-}
-
-/* Chat message container */
-.stChatMessage {
-    background-color: var(--input-background);
+/* Chat messages */
+[data-testid="stChatMessage"] {
+    background-color: #2d2d2d;
+    border: 1px solid #404040;
     border-radius: 10px;
     padding: 1.5rem;
-    margin: 1rem 0;
-    border: 1px solid var(--border-color);
-    max-width: 1200px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
+    margin: 1rem auto;
+    max-width: 1200px;
 }
 
 /* Expander styling */
 .streamlit-expanderHeader {
-    background-color: var(--input-background) !important;
-    border: 1px solid var(--border-color) !important;
+    background-color: #2d2d2d !important;
+    border: 1px solid #404040 !important;
     border-radius: 8px !important;
-    padding: 1.25rem !important;
-    margin: 0.75rem 0 !important;
+    padding: 1rem !important;
+    margin: 0.5rem 0 !important;
 }
 
 .streamlit-expanderContent {
     border: none !important;
-    padding: 1.25rem !important;
+    padding: 1rem !important;
     background-color: transparent !important;
 }
 
-/* Button styling */
+/* Input area */
+.stChatInput {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: #1a1a1a;
+    padding: 1rem 3rem;
+    margin: 0;
+    z-index: 999;
+}
+
+.stChatInput > div {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* File uploader */
+[data-testid="stFileUploader"] {
+    background-color: #2d2d2d;
+    border: 1px dashed #404040;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+/* Buttons */
 .stButton > button {
     width: 100%;
-    border: 1px solid var(--border-color);
-    padding: 0.75rem 1.25rem;
     background-color: transparent;
-    color: var(--text-color);
+    color: white;
+    border: 1px solid #404040;
     border-radius: 6px;
+    padding: 0.75rem 1rem;
     transition: all 0.2s ease;
-    font-size: 0.95rem;
 }
 
 .stButton > button:hover {
-    background-color: var(--hover-color);
-    border-color: var(--accent-color);
+    background-color: #45a049;
+    border-color: #4CAF50;
 }
 
-/* Progress spinner */
+/* Download link */
+a.download-link {
+    display: inline-block;
+    padding: 0.75rem 1rem;
+    background-color: #2d2d2d;
+    color: white;
+    text-decoration: none;
+    border: 1px solid #404040;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+a.download-link:hover {
+    background-color: #45a049;
+    border-color: #4CAF50;
+}
+
+/* Progress indicator */
 .processing-message {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     padding: 1rem;
-    background-color: var(--input-background);
+    background-color: #2d2d2d;
     border-radius: 8px;
-    margin: 0.5rem 0;
+    margin: 0.5rem auto;
+    max-width: 1200px;
 }
 
-.spinner {
-    width: 20px;
-    height: 20px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    border-top-color: var(--text-color);
-    animation: spin 1s linear infinite;
+/* Add padding at bottom for fixed input */
+.main .block-container::after {
+    content: "";
+    display: block;
+    height: 8rem;
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-/* Hide default Streamlit elements */
+/* Hide default elements */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
-
-/* File uploader styling */
-[data-testid="stFileUploader"] {
-    padding: 1.5rem;
-    background-color: var(--input-background);
-    border-radius: 8px;
-    border: 1px dashed var(--border-color);
-    width: 100% !important;
-}
-
-/* Chat input styling */
-.stChatInput {
-    max-width: 1200px !important;
-    margin: 0 auto !important;
-    padding: 1rem !important;
-}
-
-/* Download link styling */
-a.download-link {
-    display: inline-block;
-    padding: 0.75rem 1.25rem;
-    background-color: var(--input-background);
-    color: var(--text-color);
-    text-decoration: none;
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
-    transition: all 0.2s ease;
-    margin: 0.5rem 0;
-    font-size: 0.95rem;
-}
-
-a.download-link:hover {
-    background-color: var(--hover-color);
-    border-color: var(--accent-color);
-}
-
-/* Title styling */
-h1 {
-    max-width: 1200px !important;
-    margin: 2rem auto 3rem !important;
-    padding: 0 1rem !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -790,32 +771,34 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         return None
 
 def chat_interface():
-    """Modern chat interface with minimal design."""
+    """Modern chat interface following Streamlit best practices."""
     try:
-        st.title("AI Assistant")
+        # Initialize state and configuration
         initialize_session_state()
-        model_settings_sidebar()
+        
+        # Set up the layout
+        st.title("AI Assistant")
+        
+        # Configure sidebar
+        with st.sidebar:
+            model_settings_sidebar()
+            how_it_works_sidebar()
+        
+        # Get orchestrator
         orchestrator = get_orchestrator()
         
-        # Create main container for chat
+        # Create main chat container
         chat_container = st.container()
         
-        # Create a container for messages that will scroll
+        # Create message display area
         with chat_container:
-            messages_container = st.container()
-            with messages_container:
-                for message in st.session_state.messages:
-                    display_message(message)
+            # Display existing messages
+            for message in st.session_state.messages:
+                display_message(message)
             
-            # Add some space before the input area
-            st.markdown("<div style='padding: 3rem'></div>", unsafe_allow_html=True)
-            
-            # Create a container for input that will stay at bottom
+            # Create input area container
             input_container = st.container()
             with input_container:
-                # Add a separator line
-                st.markdown("<hr style='margin: 0; padding: 0'>", unsafe_allow_html=True)
-                
                 # Create columns for file upload and input
                 col1, col2 = st.columns([1, 4])
                 with col1:
@@ -831,13 +814,8 @@ def chat_interface():
         
         # Process new input
         if prompt:
-            files_data = []
-            if uploaded_files:
-                for uploaded_file in uploaded_files:
-                    file_data = process_file_upload(uploaded_file)
-                    if file_data:
-                        files_data.append(file_data)
-                        st.toast(f"📎 {file_data['name']} attached")
+            # Handle file uploads
+            files_data = process_uploads(uploaded_files) if uploaded_files else []
             
             # Add user message to history
             st.session_state.messages.append({
@@ -846,15 +824,13 @@ def chat_interface():
                 "files_data": files_data if files_data else None
             })
             
+            # Process through orchestrator
             try:
-                # Process through orchestrator
-                response = process_with_orchestrator(orchestrator, prompt, files_data if files_data else None)
+                response = process_with_orchestrator(orchestrator, prompt, files_data)
                 if response:
                     st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
             except Exception as e:
-                st.error(f"Error: {str(e)}")
-                if st.checkbox("Show detailed error"):
-                    st.error("Full error details:", exc_info=True)
+                handle_error(e)
         
         # Handle suggestion clicks
         if 'next_prompt' in st.session_state:
@@ -863,79 +839,125 @@ def chat_interface():
             st.rerun()
             
     except Exception as e:
-        st.error(f"Error in chat interface: {str(e)}")
-        if st.checkbox("Show detailed error"):
-            st.error("Full error details:", exc_info=True)
+        handle_error(e)
+
+def process_uploads(uploaded_files):
+    """Process multiple file uploads with progress tracking."""
+    files_data = []
+    if uploaded_files:
+        progress_text = "Processing uploads..."
+        progress_bar = st.progress(0)
+        
+        for i, uploaded_file in enumerate(uploaded_files):
+            file_data = process_file_upload(uploaded_file)
+            if file_data:
+                files_data.append(file_data)
+                st.toast(f"📎 {file_data['name']} attached")
+            progress_bar.progress((i + 1) / len(uploaded_files))
+        
+        progress_bar.empty()
+    return files_data
+
+def handle_error(error):
+    """Handle errors in a user-friendly way."""
+    st.error(f"Error: {str(error)}")
+    with st.expander("Show detailed error", expanded=False):
+        st.code(traceback.format_exc())
 
 def display_message(message: dict):
-    """Display a chat message with appropriate styling."""
+    """Display a chat message following Streamlit best practices."""
     role = message.get('role', 'user')
     content = message.get('content', '')
+    message_type = message.get('type', '')
     
     if role == 'user':
         with st.chat_message("user"):
             st.markdown(content)
-            if message.get("files_data"):
-                for file_data in message["files_data"]:
-                    if file_data["type"] == "image":
-                        st.image(file_data["display_data"])
-                    elif file_data["type"] == "text":
-                        with st.expander(f"📄 {file_data['name']}", expanded=False):
-                            st.text(file_data["data"])
+            display_attachments(message.get("files_data", []))
     
     elif role == 'assistant':
         avatar = message.get("avatar", "🤖")
         with st.chat_message("assistant", avatar=avatar):
-            if message.get("type") == "initial_analysis":
-                with st.expander("Initial Analysis", expanded=False):
-                    st.markdown(message["content"])
-                    st.markdown("---")
-                    if st.button("📋 Copy Analysis", key=f"copy_initial_{hash(str(message))}"):
-                        copy_to_clipboard(message["content"])
+            if message_type == "initial_analysis":
+                display_analysis_message("Initial Analysis", content)
             
-            elif message.get("type") == "specialist":
-                with st.expander(f"{message['domain'].title()} Analysis", expanded=False):
-                    st.markdown(message["content"])
-                    st.markdown("---")
-                    if st.button("📋 Copy Analysis", key=f"copy_specialist_{hash(str(message))}"):
-                        copy_to_clipboard(message["content"])
+            elif message_type == "specialist":
+                display_analysis_message(f"{message['domain'].title()} Analysis", content)
             
-            elif message.get("type") == "synthesis":
-                with st.expander("Final Synthesis", expanded=True):
-                    st.markdown(message["content"])
-                    st.markdown("---")
-                    col1, col2 = st.columns([1, 1])
-                    with col1:
-                        if st.button("📋 Copy Synthesis", key=f"copy_synthesis_{hash(str(message))}"):
-                            copy_to_clipboard(message["content"])
-                    with col2:
-                        # Generate full report content
-                        report_content = "# Analysis Report\n\n"
-                        for msg in st.session_state.messages:
-                            if msg.get("type") in ["initial_analysis", "specialist", "synthesis"]:
-                                report_content += f"## {msg.get('type', '').replace('_', ' ').title()}\n\n"
-                                report_content += msg["content"] + "\n\n"
-                        
-                        # Create download link
-                        st.markdown(
-                            get_download_link(report_content, "analysis_report.md"),
-                            unsafe_allow_html=True
-                        )
+            elif message_type == "synthesis":
+                display_synthesis_message(content)
             
-            elif message.get("type") == "suggestions":
-                st.markdown("### 🤔 Explore Further")
-                for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
-                    with st.container():
-                        if st.button(
-                            f"💡 {headline}",
-                            key=f"suggestion_{idx}_{hash(str(message))}",
-                            help=full_question,
-                            use_container_width=True
-                        ):
-                            st.session_state.next_prompt = full_question
-                            st.experimental_rerun()
+            elif message_type == "suggestions":
+                display_suggestions(message.get("suggestions", []))
+            
             else:
                 st.markdown(content)
+
+def display_attachments(files_data):
+    """Display file attachments in chat messages."""
+    if not files_data:
+        return
+        
+    for file_data in files_data:
+        if file_data["type"] == "image":
+            st.image(file_data["display_data"])
+        elif file_data["type"] == "text":
+            with st.expander(f"📄 {file_data['name']}", expanded=False):
+                st.text(file_data["data"])
+
+def display_analysis_message(title: str, content: str):
+    """Display an analysis message with copy functionality."""
+    with st.expander(title, expanded=False):
+        st.markdown(content)
+        st.markdown("---")
+        col1, col2 = st.columns([6, 1])
+        with col2:
+            if st.button("📋", key=f"copy_{hash(content)}", help="Copy to clipboard"):
+                copy_to_clipboard(content)
+
+def display_synthesis_message(content: str):
+    """Display the synthesis message with enhanced functionality."""
+    with st.expander("Final Synthesis", expanded=True):
+        st.markdown(content)
+        st.markdown("---")
+        
+        # Create action buttons
+        col1, col2, col3 = st.columns([4, 4, 4])
+        
+        with col1:
+            if st.button("📋 Copy", key=f"copy_synthesis_{hash(content)}"):
+                copy_to_clipboard(content)
+        
+        with col2:
+            # Generate full report content
+            report_content = generate_full_report()
+            st.markdown(
+                get_download_link(report_content, "analysis_report.md"),
+                unsafe_allow_html=True
+            )
+
+def display_suggestions(suggestions):
+    """Display follow-up suggestions."""
+    st.markdown("### 🤔 Explore Further")
+    for idx, (headline, full_question) in enumerate(suggestions):
+        with st.container():
+            if st.button(
+                f"💡 {headline}",
+                key=f"suggestion_{idx}_{hash(str(headline))}",
+                help=full_question,
+                use_container_width=True
+            ):
+                st.session_state.next_prompt = full_question
+                st.experimental_rerun()
+
+def generate_full_report() -> str:
+    """Generate a full report from all messages."""
+    report_content = "# Analysis Report\n\n"
+    for msg in st.session_state.messages:
+        if msg.get("type") in ["initial_analysis", "specialist", "synthesis"]:
+            report_content += f"## {msg.get('type', '').replace('_', ' ').title()}\n\n"
+            report_content += msg["content"] + "\n\n"
+    return report_content
 
 if __name__ == "__main__":
     # Load environment variables
