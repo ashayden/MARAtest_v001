@@ -741,211 +741,131 @@ def get_orchestrator():
 def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None):
     """Process input through the collaborative agent system."""
     try:
-        # Clear previous responses at the start of each new request
+        # Reset state for new request
         st.session_state.specialist_responses = {}
         st.session_state.current_domains = []
+        st.session_state.suggestions = []
         
         # Prepare messages
         parts = prepare_messages(prompt, files_data)
         
-        # Create containers for dynamic updates
-        progress_text = st.empty()
-        specialist_containers = st.container()
-        error_container = st.container()  # Container for error messages
+        # Progress indicators
+        progress = st.empty()
+        error_container = st.empty()
         
-        # Progress indicator with spinner
-        progress_text.markdown("""
-        <div class="processing-message">
-            <div class="spinner"></div>
-            <span>Analyzing input...</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Get initial analysis silently
+        # Get initial analysis
+        progress.markdown("🔍 Performing initial analysis...")
         initial_response = ""
         for chunk in orchestrator.agents['initializer'].generate_response(parts, stream=True):
             if chunk:
                 initial_response += chunk
         
-        # Identify needed specialists
+        if initial_response:
+            st.session_state.specialist_responses['initial_analysis'] = initial_response
+        
+        # Identify required specialists
+        domains = []
         if isinstance(parts, list) and parts and 'text' in parts[0]:
             domains = orchestrator.identify_required_specialists(parts[0]['text'])
-        else:
-            domains = []
-        
-        # Store domains in session state for persistence
         st.session_state.current_domains = domains
-        
-        # Initialize specialist_responses as dictionary if not already
-        if not isinstance(st.session_state.specialist_responses, dict):
-            st.session_state.specialist_responses = {}
-        
-        # Store initial analysis
-        st.session_state.specialist_responses['initial_analysis'] = initial_response
-        
-        # Track if all specialists complete successfully
-        all_specialists_successful = True
         
         # Process specialist responses
         if domains:
-            # Create placeholders for each specialist
-            specialist_placeholders = {}
-            with specialist_containers:
-                for domain in domains:
-                    specialist_placeholders[domain] = st.empty()
-            
             for domain in domains:
                 try:
-                    # Update progress message for current specialist
-                    progress_text.markdown(f"""
-                    <div class="processing-message">
-                        <div class="spinner"></div>
-                        <span>Consulting {domain.title()} specialist...</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    progress.markdown(f"🤔 Consulting {domain.title()} specialist...")
                     
                     if domain not in orchestrator.agents:
                         orchestrator.agents[domain] = orchestrator.create_specialist(domain)
                     
-                    specialist_response = ""
-                    response_container = specialist_placeholders[domain]
-                    
-                    # Initialize the expander
-                    with response_container:
-                        with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
-                            response_text = st.empty()
-                    
-                    # Construct previous responses list with proper resolution
+                    # Get previous responses for context
                     previous_responses = []
                     if initial_response:
-                        previous_responses.append(str(initial_response))
+                        previous_responses.append(initial_response)
                     
-                    # Add previous specialist responses in order
-                    for d in domains:
-                        if d != domain:  # Skip current domain
-                            response = st.session_state.specialist_responses.get(d)
-                            if response and isinstance(response, str):
-                                previous_responses.append(str(response))
+                    # Add previous specialist responses
+                    for prev_domain in st.session_state.current_domains:
+                        if prev_domain != domain and prev_domain in st.session_state.specialist_responses:
+                            prev_response = st.session_state.specialist_responses.get(prev_domain)
+                            if prev_response:
+                                previous_responses.append(prev_response)
                     
+                    # Generate specialist response
+                    specialist_response = ""
                     for chunk in orchestrator.agents[domain].generate_response(
                         parts,
                         previous_responses=previous_responses,
                         stream=True
                     ):
-                        specialist_response += chunk
-                        # Update the response text in real-time
-                        response_text.markdown(specialist_response)
+                        if chunk:
+                            specialist_response += chunk
                     
-                    # Store specialist response in session state dictionary
                     if specialist_response:
-                        st.session_state.specialist_responses[domain] = str(specialist_response)
+                        st.session_state.specialist_responses[domain] = specialist_response
                     
                 except Exception as e:
-                    with error_container:
-                        st.error(f"Error with {domain} specialist: {str(e)}")
-                        with st.expander("Show detailed error", expanded=False):
-                            st.code(traceback.format_exc())
-                    all_specialists_successful = False
-                    break  # Stop processing on first error
+                    error_container.error(f"Error with {domain} specialist: {str(e)}")
+                    return None
         
-        # Only proceed with synthesis if all specialists completed successfully
-        if all_specialists_successful:
-            # Generate synthesis
-            progress_text.markdown("""
-            <div class="processing-message">
-                <div class="spinner"></div>
-                <span>Synthesizing insights...</span>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            synthesis = ""
-            previous_responses = []
-            
-            # Add initial analysis if available
-            if initial_response:
-                previous_responses.append(str(initial_response))
-            
-            # Add specialist responses in order
-            for d in domains:
-                response = st.session_state.specialist_responses.get(d)
-                if response and isinstance(response, str):
-                    previous_responses.append(str(response))
-            
-            for chunk in orchestrator.agents['reasoner'].generate_response(
-                parts,
-                previous_responses=previous_responses,
-                stream=True
-            ):
-                if chunk:
-                    synthesis += chunk
-            
-            # Store synthesis in session state
-            if synthesis:
-                st.session_state.specialist_responses['final_synthesis'] = str(synthesis)
-            
-            # Clear progress indicator
-            progress_text.empty()
-            
-            # Add to history
-            st.session_state.messages.append({
-                'role': 'user',
-                'content': prompt,
-                'files_data': files_data if files_data else None
-            })
-            
-            st.session_state.messages.append({
-                'role': 'assistant',
-                'content': synthesis
-            })
-            
-            return synthesis
-        else:
-            progress_text.empty()
-            return None
+        # Generate final synthesis
+        progress.markdown("🎯 Synthesizing insights...")
+        
+        # Collect all responses for synthesis
+        synthesis_inputs = []
+        if initial_response:
+            synthesis_inputs.append(initial_response)
+        
+        for domain in st.session_state.current_domains:
+            if domain in st.session_state.specialist_responses:
+                synthesis_inputs.append(st.session_state.specialist_responses[domain])
+        
+        # Generate synthesis
+        synthesis = ""
+        for chunk in orchestrator.agents['reasoner'].generate_response(
+            parts,
+            previous_responses=synthesis_inputs,
+            stream=True
+        ):
+            if chunk:
+                synthesis += chunk
+        
+        if synthesis:
+            st.session_state.specialist_responses['final_synthesis'] = synthesis
+        
+        # Clear progress indicator
+        progress.empty()
+        
+        return synthesis
         
     except Exception as e:
-        with error_container:
-            st.error(f"Orchestrator error: {str(e)}")
-            with st.expander("Show detailed error", expanded=False):
-                st.code(traceback.format_exc())
+        error_container.error(f"Error: {str(e)}")
+        if st.checkbox("Show detailed error"):
+            st.error("Full error details:", exc_info=True)
         return None
 
 def chat_interface():
     """Modern chat interface with minimal design."""
     try:
         st.title("AI Assistant")
-        
-        # Initialize session state
         initialize_session_state()
-        
-        # Show model settings sidebar
         model_settings_sidebar()
-        
-        # Get orchestrator
         orchestrator = get_orchestrator()
         
-        # Create containers in specific order
-        input_container = st.container()  # For input at top
-        chat_container = st.container()  # For message history
-        
-        # Handle input at top
+        # Input area at top
+        input_container = st.container()
         with input_container:
-            # File uploader with better layout
             uploaded_files = st.file_uploader(
                 "📎 Attach files",
                 type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
                 accept_multiple_files=True,
                 key=st.session_state.file_uploader_key,
-                label_visibility="collapsed"  # Hide the label since we show it in a cleaner way
+                label_visibility="collapsed"
             )
-            
-            # Chat input
             prompt = st.chat_input("Message", key="chat_input")
-            st.markdown("---")  # Visual separator
+            st.markdown("---")
         
-        # Handle input if provided
+        # Process new input
         if prompt:
-            # Process uploaded files
             files_data = []
             if uploaded_files:
                 for uploaded_file in uploaded_files:
@@ -954,127 +874,91 @@ def chat_interface():
                         files_data.append(file_data)
                         st.toast(f"📎 {file_data['name']} attached")
             
+            # Add user message to history
+            st.session_state.messages.append({
+                "role": "user",
+                "content": prompt,
+                "files_data": files_data if files_data else None
+            })
+            
             try:
                 # Process through orchestrator
                 response = process_with_orchestrator(orchestrator, prompt, files_data if files_data else None)
-                
                 if response:
-                    # Update file uploader key to clear files
                     st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
-                    
-                    # Generate suggestions
                     suggestions = generate_suggestions(response)
                     if suggestions:
                         st.session_state.suggestions = suggestions
-                
             except Exception as e:
                 st.error(f"Error: {str(e)}")
                 if st.checkbox("Show detailed error"):
                     st.error("Full error details:", exc_info=True)
         
-        # Display chat history with consistent container styling
-        with chat_container:
-            for message in st.session_state.messages:
-                if message["role"] == "user":
-                    with st.chat_message("user"):
-                        st.write(message["content"])
-                        # Handle files_data
-                        if message.get("files_data"):
-                            for file_data in message["files_data"]:
-                                if file_data["type"] == "image":
-                                    st.image(file_data["display_data"])
-                                elif file_data["type"] == "text":
-                                    with st.expander(f"📄 {file_data['name']}", expanded=False):
-                                        st.text(file_data["data"])
-                else:  # assistant response
-                    with st.container():
-                        # Store all responses in order
-                        responses_to_display = []
-                        seen_domains = set()  # Track which domains we've already displayed
-                        
-                        # 1. Initial Analysis (always first)
-                        initial_analysis = st.session_state.specialist_responses.get('initial_analysis')
-                        if initial_analysis:
-                            responses_to_display.append({
-                                'title': "🎯 Initial Analysis",
-                                'content': initial_analysis
-                            })
-                        
-                        # 2. Domain Specialists (in order they were called)
-                        if 'current_domains' in st.session_state:
-                            for domain in st.session_state.current_domains:
-                                # Only add each domain once
-                                if domain not in seen_domains and domain in st.session_state.specialist_responses:
-                                    responses_to_display.append({
-                                        'title': f"🔍 {domain.title()} Analysis",
-                                        'content': st.session_state.specialist_responses[domain]
-                                    })
-                                    seen_domains.add(domain)
-                        
-                        # 3. Final Synthesis (always last)
-                        if message.get("content"):  # Only add if there's content
-                            responses_to_display.append({
-                                'title': "📊 Final Synthesis",
-                                'content': message["content"],
-                                'is_synthesis': True
-                            })
-                        
-                        # Display all responses in order
-                        for response in responses_to_display:
-                            with st.expander(response['title'], expanded=False):
-                                st.markdown(response['content'])
+        # Display chat history
+        for message in st.session_state.messages:
+            if message["role"] == "user":
+                with st.chat_message("user"):
+                    st.write(message["content"])
+                    if message.get("files_data"):
+                        for file_data in message["files_data"]:
+                            if file_data["type"] == "image":
+                                st.image(file_data["display_data"])
+                            elif file_data["type"] == "text":
+                                with st.expander(f"📄 {file_data['name']}", expanded=False):
+                                    st.text(file_data["data"])
+            
+            elif message["role"] == "assistant":
+                with st.chat_message("assistant"):
+                    # Display responses in order: Initial → Specialists → Synthesis
+                    if 'initial_analysis' in st.session_state.specialist_responses:
+                        with st.expander("🎯 Initial Analysis", expanded=False):
+                            st.markdown(st.session_state.specialist_responses['initial_analysis'])
+                    
+                    # Display specialist responses in order they were called
+                    displayed_domains = set()
+                    if 'current_domains' in st.session_state:
+                        for domain in st.session_state.current_domains:
+                            if domain not in displayed_domains and domain in st.session_state.specialist_responses:
+                                with st.expander(f"🔍 {domain.title()} Analysis", expanded=False):
+                                    st.markdown(st.session_state.specialist_responses[domain])
+                                displayed_domains.add(domain)
+                    
+                    # Display final synthesis
+                    if 'final_synthesis' in st.session_state.specialist_responses:
+                        with st.expander("📊 Final Synthesis", expanded=True):
+                            st.markdown(st.session_state.specialist_responses['final_synthesis'])
+                            
+                            # Display suggestions only after synthesis
+                            if st.session_state.suggestions:
+                                st.markdown("---")
+                                st.markdown("### 🤔 Explore Further")
+                                cols = st.columns(3)
+                                button_styles = ["💡", "🔄", "🌟"]
                                 
-                                # Add suggestions only after final synthesis
-                                if response.get('is_synthesis') and st.session_state.suggestions:
-                                    st.markdown("---")
-                                    st.markdown("### 🤔 Explore Further")
-                                    
-                                    # Create three columns with equal width
-                                    cols = st.columns(3)
-                                    
-                                    # Define button styles for each type
-                                    button_styles = [
-                                        "💡",  # For deep dive
-                                        "🔄",  # For related topics
-                                        "🌟"   # For unexpected connections
-                                    ]
-                                    
-                                    # Display each suggestion in its own column
-                                    for idx, ((headline, full_question), style, col) in enumerate(zip(
-                                        st.session_state.suggestions,
-                                        button_styles,
-                                        cols
-                                    )):
-                                        with col:
-                                            if st.button(
-                                                f"{style} {headline}",
-                                                key=f"suggestion_{idx}",
-                                                help=full_question  # Show full question on hover
-                                            ):
-                                                st.session_state.next_prompt = full_question
-                                                st.rerun()
-                                            
-                                            # Show truncated version of full question below button
-                                            st.caption(full_question[:100] + "..." if len(full_question) > 100 else full_question)
+                                for idx, ((headline, full_question), style, col) in enumerate(zip(
+                                    st.session_state.suggestions,
+                                    button_styles,
+                                    cols
+                                )):
+                                    with col:
+                                        if st.button(
+                                            f"{style} {headline}",
+                                            key=f"suggestion_{idx}",
+                                            help=full_question
+                                        ):
+                                            st.session_state.next_prompt = full_question
+                                            st.rerun()
+                                        st.caption(full_question[:100] + "..." if len(full_question) > 100 else full_question)
         
-        # Check for suggestion click
+        # Handle suggestion clicks
         if 'next_prompt' in st.session_state:
             prompt = st.session_state.next_prompt
             del st.session_state.next_prompt
-
-    except OSError as e:
-        if "inotify watch limit reached" in str(e):
-            st.error("""
-            File watch limit reached. Please run these commands on your server:
-            ```bash
-            sudo sysctl -w fs.inotify.max_user_watches=524288
-            echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
-            sudo sysctl -p
-            ```
-            Then restart the Streamlit server.
-            """)
-        else:
-            raise e
+            
+    except Exception as e:
+        st.error(f"Error in chat interface: {str(e)}")
+        if st.checkbox("Show detailed error"):
+            st.error("Full error details:", exc_info=True)
 
 def create_specialist_container(specialist_name: str, response: str):
     """Create a collapsible container for specialist responses."""
