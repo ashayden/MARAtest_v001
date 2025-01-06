@@ -578,12 +578,12 @@ def get_domain_avatar(domain: str) -> str:
 def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None):
     """Process input through the collaborative agent system."""
     # Create containers outside the try block
-    status_container = st.status("Processing...", expanded=True)
+    status_container = st.empty()
     error_container = st.empty()
     
     try:
         def update_progress(message):
-            status_container.update(label=message, expanded=True)
+            status_container.write(message)
         
         # Reset state for new request
         st.session_state.specialist_responses = {}
