@@ -353,7 +353,7 @@ def prepare_messages(text_input: str, file_data: dict = None) -> list:
     return parts
 
 def chat_interface():
-    """Main chat interface with file upload and input handling."""
+    """Main chat interface with integrated file upload."""
     st.title("AI Assistant")
     
     # Initialize chat history
@@ -371,67 +371,101 @@ def chat_interface():
                     with st.expander("📄 View File Content"):
                         st.text(message["file_data"]["data"])
     
-    # File upload - Always visible above the chat input
-    uploaded_file = st.file_uploader(
-        "Upload a file (images, text, PDF)",
-        type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-        help="The model can process images, text files, and PDFs",
-        key="file_uploader"
-    )
-
-    # Process uploaded file immediately
-    file_data = None
-    if uploaded_file:
-        file_data = process_file_upload(uploaded_file)
-        if file_data:
-            st.success(f"File '{file_data['name']}' processed successfully!")
+    # Create a container for the input area
+    input_container = st.container()
     
-    # Chat input
-    if prompt := st.chat_input("Type your message here..."):
-        # Add user message to chat
-        st.chat_message("user").write(prompt)
-        if file_data:
-            st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
-        
-        # Add to message history
-        user_message = {
-            "role": "user",
-            "content": prompt
+    with input_container:
+        # Custom CSS for the integrated input area
+        st.markdown("""
+        <style>
+        .stChatInput {
+            display: flex;
+            align-items: center;
         }
-        if file_data:
-            user_message["file_data"] = file_data
-        st.session_state.messages.append(user_message)
+        .uploadButton {
+            position: absolute;
+            right: 60px;  /* Position to the left of the send button */
+            bottom: 10px;
+            z-index: 100;
+        }
+        .stChatInput > div {
+            flex-grow: 1;
+        }
+        .stChatInput input {
+            padding-right: 100px !important;  /* Make room for the upload button */
+        }
+        </style>
+        """, unsafe_allow_html=True)
         
-        try:
-            # Prepare messages for the model
-            parts = prepare_messages(prompt, file_data)
-            
-            # Generate response using Gemini
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            response = model.generate_content(
-                parts,
-                generation_config={
-                    'temperature': 0.7,
-                    'top_p': 0.95,
-                    'top_k': 40,
-                    'max_output_tokens': 2048,
-                }
+        # Create two columns for upload button and chat input
+        col1, col2 = st.columns([0.1, 0.9])
+        
+        # File upload in the first column
+        with col1:
+            uploaded_file = st.file_uploader(
+                "",
+                type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+                label_visibility="collapsed",
+                key="chat_file_uploader"
             )
-            
-            # Display assistant response
-            with st.chat_message("assistant"):
-                st.write(response.text)
-            
-            # Add to message history
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": response.text
-            })
-            
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
-            if st.checkbox("Show detailed error"):
-                st.error("Full error details:", exc_info=True)
+        
+        # Chat input in the second column
+        with col2:
+            if prompt := st.chat_input("Type your message here or drag & drop a file"):
+                # Process any uploaded file
+                file_data = None
+                if uploaded_file:
+                    file_data = process_file_upload(uploaded_file)
+                    if file_data:
+                        st.toast(f"📎 {file_data['name']} attached")
+                
+                # Add user message to chat
+                st.chat_message("user").write(prompt)
+                if file_data:
+                    if file_data["type"] == "image":
+                        st.chat_message("user").image(file_data["display_data"])
+                    else:
+                        st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
+                
+                # Add to message history
+                user_message = {
+                    "role": "user",
+                    "content": prompt
+                }
+                if file_data:
+                    user_message["file_data"] = file_data
+                st.session_state.messages.append(user_message)
+                
+                try:
+                    # Prepare messages for the model
+                    parts = prepare_messages(prompt, file_data)
+                    
+                    # Generate response using Gemini
+                    model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                    response = model.generate_content(
+                        parts,
+                        generation_config={
+                            'temperature': 0.7,
+                            'top_p': 0.95,
+                            'top_k': 40,
+                            'max_output_tokens': 2048,
+                        }
+                    )
+                    
+                    # Display assistant response
+                    with st.chat_message("assistant"):
+                        st.write(response.text)
+                    
+                    # Add to message history
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": response.text
+                    })
+                    
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+                    if st.checkbox("Show detailed error"):
+                        st.error("Full error details:", exc_info=True)
 
 if __name__ == "__main__":
     # Load environment variables
