@@ -1,4 +1,12 @@
 import streamlit as st
+
+# Configure page before any other Streamlit commands
+st.set_page_config(
+    page_title="AI Assistant",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -71,34 +79,27 @@ except ImportError:
     ```
     """)
 
-# Update the page config at the start of the file, before any other Streamlit calls
-st.set_page_config(
-    page_title="AI Assistant",
-    layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items=None
-)
-
-# Update the CSS for width control
+# Update the CSS for proper width control
 st.markdown("""
 <style>
-/* Layout width control */
+/* Remove padding and set max-width */
 .block-container {
-    padding-top: 1rem !important;
-    padding-left: 2rem !important;
-    padding-right: 2rem !important;
-    max-width: 95% !important;
+    max-width: none !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    padding-top: 0.5rem !important;
 }
 
 /* Sidebar width */
-section[data-testid="stSidebar"] {
-    width: 24rem !important;
+section[data-testid="stSidebar"] > div {
+    width: 350px !important;
+    padding: 1rem !important;
 }
 
 /* Main content area */
-.main > div {
-    padding-left: 2rem !important;
-    padding-right: 2rem !important;
+.main > .block-container {
+    max-width: none !important;
+    padding: 2rem 5rem !important;
 }
 
 /* Modern dark theme */
@@ -927,7 +928,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 initial_response += chunk
         
         if initial_response:
-            # Create initial analysis message
+            # Create and immediately display initial analysis message
             initial_message = {
                 "role": "assistant",
                 "type": "initial_analysis",
@@ -935,6 +936,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 "avatar": "🎯"
             }
             st.session_state.messages.append(initial_message)
+            st.rerun()  # Force update to display initial analysis
         
         # Extract text content for specialist identification
         text_content = ""
@@ -947,6 +949,8 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         st.session_state.current_domains = domains
         
         # Process specialist responses
+        synthesis_inputs = [{'text': initial_response}]  # Start with initial analysis
+        
         if domains:
             for domain in domains:
                 try:
@@ -960,16 +964,11 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     if domain not in orchestrator.agents:
                         orchestrator.agents[domain] = orchestrator.create_specialist(domain)
                     
-                    # Get previous responses for context
-                    previous_responses = []
-                    if initial_response:
-                        previous_responses.append({'text': initial_response})
-                    
                     # Generate specialist response
                     specialist_response = ""
                     for chunk in orchestrator.agents[domain].generate_response(
                         parts,
-                        previous_responses=previous_responses,
+                        previous_responses=synthesis_inputs.copy(),  # Pass accumulated responses
                         stream=True
                     ):
                         if chunk:
@@ -985,10 +984,12 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                             "avatar": get_domain_avatar(domain)
                         }
                         st.session_state.messages.append(specialist_message)
+                        synthesis_inputs.append({'text': specialist_response})
+                        st.rerun()  # Force update to display specialist response
                     
                 except Exception as e:
                     error_container.error(f"Error with {domain} specialist: {str(e)}")
-                    return None
+                    continue  # Continue with other specialists if one fails
         
         # Generate final synthesis
         progress.markdown("""
@@ -998,13 +999,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         </div>
         """, unsafe_allow_html=True)
         
-        # Collect all responses for synthesis
-        synthesis_inputs = []
-        for message in st.session_state.messages:
-            if message["role"] == "assistant" and "content" in message:
-                synthesis_inputs.append({'text': message["content"]})
-        
-        # Generate synthesis
+        # Generate synthesis using accumulated responses
         synthesis = ""
         for chunk in orchestrator.agents['reasoner'].generate_response(
             parts,
@@ -1015,7 +1010,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 synthesis += chunk
         
         if synthesis:
-            # Create synthesis message
+            # Create and display synthesis message
             synthesis_message = {
                 "role": "assistant",
                 "type": "synthesis",
@@ -1023,8 +1018,9 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 "avatar": "📊"
             }
             st.session_state.messages.append(synthesis_message)
+            st.rerun()  # Force update to display synthesis
             
-            # Generate suggestions based on synthesis
+            # Generate and display suggestions
             try:
                 suggestions = generate_suggestions(synthesis)
                 if suggestions:
@@ -1035,12 +1031,12 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                         "avatar": "💡"
                     }
                     st.session_state.messages.append(suggestions_message)
+                    st.rerun()  # Force update to display suggestions
             except Exception as e:
-                st.error(f"Error generating suggestions: {str(e)}")
+                error_container.error(f"Error generating suggestions: {str(e)}")
         
         # Clear progress indicator
         progress.empty()
-        
         return synthesis
         
     except Exception as e:
