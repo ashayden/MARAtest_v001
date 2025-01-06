@@ -214,6 +214,71 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
     border-radius: 8px;
     margin: 10px 0;
 }
+
+/* Input container styling */
+.input-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--background-color);
+    border-top: 1px solid var(--border-color);
+    padding: 1rem;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+}
+
+/* Ensure content doesn't get hidden behind input */
+.main .block-container {
+    padding-bottom: 200px !important;  /* Increased padding to prevent content hiding */
+    max-width: 1000px;  /* Limit content width for better readability */
+}
+
+/* Style file uploader in fixed container */
+.input-container .stFileUploader {
+    margin-bottom: 0.5rem;
+}
+
+/* Chat input styling */
+.stChatInput {
+    margin-bottom: 0 !important;
+}
+
+.stChatInput > div {
+    padding: 0 !important;
+}
+
+/* Adjust chat message container */
+.chat-message-container {
+    margin-bottom: 180px;  /* Space for fixed input area */
+}
+
+/* Glass effect for input container */
+.input-container {
+    background: rgba(26, 26, 26, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Hide default Streamlit padding at the bottom */
+.main .block-container {
+    padding-bottom: 200px !important;
+}
+
+/* Custom styling for the file uploader */
+.file-uploader-container {
+    background: rgba(45, 45, 45, 0.5);
+    border-radius: 8px;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.file-uploader-container .uploadedFile {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 0.25rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -645,6 +710,9 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         # Store initial analysis
         st.session_state.specialist_responses['initial_analysis'] = initial_response
         
+        # Track if all specialists complete successfully
+        all_specialists_successful = True
+        
         # Process specialist responses
         if domains:
             # Create placeholders for each specialist
@@ -675,12 +743,16 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                             response_text = st.empty()
                     
                     # Construct previous responses list with proper resolution
-                    previous_responses = [initial_response]
+                    previous_responses = []
+                    if initial_response:
+                        previous_responses.append(str(initial_response))
+                    
+                    # Add previous specialist responses in order
                     for d in domains:
                         if d != domain:  # Skip current domain
                             response = st.session_state.specialist_responses.get(d)
-                            if response:  # Only add non-None responses
-                                previous_responses.append(response)
+                            if response and isinstance(response, str):
+                                previous_responses.append(str(response))
                     
                     for chunk in orchestrator.agents[domain].generate_response(
                         parts,
@@ -692,54 +764,71 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                         response_text.markdown(specialist_response)
                     
                     # Store specialist response in session state dictionary
-                    st.session_state.specialist_responses[domain] = specialist_response
+                    if specialist_response:
+                        st.session_state.specialist_responses[domain] = str(specialist_response)
                     
                 except Exception as e:
                     with error_container:
                         st.error(f"Error with {domain} specialist: {str(e)}")
                         with st.expander("Show detailed error", expanded=False):
                             st.code(traceback.format_exc())
-                    continue  # Continue with next specialist
+                    all_specialists_successful = False
+                    break  # Stop processing on first error
         
-        # Generate synthesis
-        progress_text.markdown("""
-        <div class="processing-message">
-            <div class="spinner"></div>
-            <span>Synthesizing insights...</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        synthesis = ""
-        previous_responses = [initial_response]
-        previous_responses.extend(st.session_state.specialist_responses.get(d, "") for d in domains)
-        
-        for chunk in orchestrator.agents['reasoner'].generate_response(
-            parts,
-            previous_responses=previous_responses,
-            stream=True
-        ):
-            if chunk:
-                synthesis += chunk
-        
-        # Store synthesis in session state
-        st.session_state.specialist_responses['final_synthesis'] = synthesis
-        
-        # Clear progress indicator
-        progress_text.empty()
-        
-        # Add to history
-        st.session_state.messages.append({
-            'role': 'user',
-            'content': prompt,
-            'files_data': files_data if files_data else None
-        })
-        
-        st.session_state.messages.append({
-            'role': 'assistant',
-            'content': synthesis
-        })
-        
-        return synthesis
+        # Only proceed with synthesis if all specialists completed successfully
+        if all_specialists_successful:
+            # Generate synthesis
+            progress_text.markdown("""
+            <div class="processing-message">
+                <div class="spinner"></div>
+                <span>Synthesizing insights...</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            synthesis = ""
+            previous_responses = []
+            
+            # Add initial analysis if available
+            if initial_response:
+                previous_responses.append(str(initial_response))
+            
+            # Add specialist responses in order
+            for d in domains:
+                response = st.session_state.specialist_responses.get(d)
+                if response and isinstance(response, str):
+                    previous_responses.append(str(response))
+            
+            for chunk in orchestrator.agents['reasoner'].generate_response(
+                parts,
+                previous_responses=previous_responses,
+                stream=True
+            ):
+                if chunk:
+                    synthesis += chunk
+            
+            # Store synthesis in session state
+            if synthesis:
+                st.session_state.specialist_responses['final_synthesis'] = str(synthesis)
+            
+            # Clear progress indicator
+            progress_text.empty()
+            
+            # Add to history
+            st.session_state.messages.append({
+                'role': 'user',
+                'content': prompt,
+                'files_data': files_data if files_data else None
+            })
+            
+            st.session_state.messages.append({
+                'role': 'assistant',
+                'content': synthesis
+            })
+            
+            return synthesis
+        else:
+            progress_text.empty()
+            return None
         
     except Exception as e:
         with error_container:
@@ -762,18 +851,36 @@ def chat_interface():
         # Get orchestrator
         orchestrator = get_orchestrator()
         
-        # Create persistent containers
+        # Create main chat container
         chat_container = st.container()
-        specialist_container = st.container()  # Container for specialist responses
-        input_container = st.container()
         
-        # Chat history
+        # Create fixed input container at bottom
+        with st.container():
+            st.markdown('<div class="input-container">', unsafe_allow_html=True)
+            
+            # File uploader in a styled container
+            with st.container():
+                st.markdown('<div class="file-uploader-container">', unsafe_allow_html=True)
+                uploaded_files = st.file_uploader(
+                    "📎 Attach files",
+                    type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
+                    accept_multiple_files=True,
+                    key=st.session_state.file_uploader_key
+                )
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Chat input
+            prompt = st.chat_input("Message", key="chat_input")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Chat history in main container
         with chat_container:
+            st.markdown('<div class="chat-message-container">', unsafe_allow_html=True)
             for message in st.session_state.messages:
                 with st.chat_message(message["role"]):
                     st.write(message["content"])
-                    # Safely handle files_data
-                    if message.get("files_data"):  # Using get() to safely handle None
+                    # Handle files_data
+                    if message.get("files_data"):
                         for file_data in message["files_data"]:
                             if file_data["type"] == "image":
                                 st.image(file_data["display_data"])
@@ -784,37 +891,26 @@ def chat_interface():
             # Display suggestions after the last message
             if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
                 display_suggestions()
+            st.markdown('</div>', unsafe_allow_html=True)
         
-        # Fixed input container at bottom
-        with input_container:
-            # File uploader (multiple files)
-            uploaded_files = st.file_uploader(
-                "📎 Attach files",
-                type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'csv', 'pdf'],
-                accept_multiple_files=True,
-                key=st.session_state.file_uploader_key
-            )
+        # Check for suggestion click
+        if 'next_prompt' in st.session_state:
+            prompt = st.session_state.next_prompt
+            del st.session_state.next_prompt
+        
+        # Handle input
+        if prompt:
+            # Process uploaded files
+            files_data = []
+            if uploaded_files:
+                for uploaded_file in uploaded_files:
+                    file_data = process_file_upload(uploaded_file)
+                    if file_data:
+                        files_data.append(file_data)
+                        st.toast(f"📎 {file_data['name']} attached")
             
-            # Chat input
-            prompt = st.chat_input("Message")
-            
-            # Check for suggestion click
-            if 'next_prompt' in st.session_state:
-                prompt = st.session_state.next_prompt
-                del st.session_state.next_prompt
-            
-            # Handle input
-            if prompt:
-                # Process uploaded files
-                files_data = []
-                if uploaded_files:
-                    for uploaded_file in uploaded_files:
-                        file_data = process_file_upload(uploaded_file)
-                        if file_data:
-                            files_data.append(file_data)
-                            st.toast(f"📎 {file_data['name']} attached")
-                
-                # Display user message
+            # Display user message
+            with chat_container:
                 st.chat_message("user").write(prompt)
                 if files_data:
                     for file_data in files_data:
@@ -822,26 +918,28 @@ def chat_interface():
                             st.chat_message("user").image(file_data["display_data"])
                         else:
                             st.chat_message("user").write(f"📎 Attached: {file_data['name']}")
+            
+            try:
+                # Process through orchestrator
+                response = process_with_orchestrator(orchestrator, prompt, files_data if files_data else None)
                 
-                try:
-                    # Process through orchestrator
-                    response = process_with_orchestrator(orchestrator, prompt, files_data if files_data else None)
-                    
-                    if response:
-                        # Display assistant response
+                if response:
+                    # Display assistant response
+                    with chat_container:
                         st.chat_message("assistant").write(response)
-                        
-                        # Generate new suggestions
-                        st.session_state.suggestions = generate_suggestions(response)
+                    
+                    # Generate new suggestions
+                    st.session_state.suggestions = generate_suggestions(response)
+                    with chat_container:
                         display_suggestions()
-                        
-                        # Update file uploader key to clear files
-                        st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
-                        
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-                    if st.checkbox("Show detailed error"):
-                        st.error("Full error details:", exc_info=True)
+                    
+                    # Update file uploader key to clear files
+                    st.session_state.file_uploader_key = f"file_uploader_{int(time.time())}"
+                    
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+                if st.checkbox("Show detailed error"):
+                    st.error("Full error details:", exc_info=True)
 
     except OSError as e:
         if "inotify watch limit reached" in str(e):
