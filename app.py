@@ -787,7 +787,8 @@ def display_message(message: dict):
     message_type = message.get('type', '')
     
     if role == 'user':
-        st.chat_message("user").markdown(content)
+        with st.chat_message("user"):
+            st.markdown(content)
     
     elif role == 'assistant':
         avatar = message.get("avatar", "🤖")
@@ -802,28 +803,31 @@ def display_message(message: dict):
         elif message_type == "suggestions":
             agent_name = "Follow-up Questions"
 
-        st.chat_message("assistant", avatar=avatar).markdown(f"**{avatar} {agent_name}**\n---\n{content}")
+        with st.chat_message("assistant", avatar=avatar):
+            st.markdown(f"**{avatar} {agent_name}**")
+            st.markdown("---")
+            st.markdown(content)
 
-        if message_type != "suggestions":
-            if st.button("📋 Copy", key=f"copy_{hash(content)}"):
-                copy_to_clipboard(content)
+            if message_type != "suggestions":
+                if st.button("📋 Copy", key=f"copy_{hash(content)}"):
+                    copy_to_clipboard(content)
 
-        if message_type == "synthesis":
-            report_content = generate_full_report()
-            st.download_button(
-                "💾 Download Report",
-                report_content,
-                file_name="analysis_report.md",
-                mime="text/markdown",
-                key=f"download_{hash(content)}"
-            )
+            if message_type == "synthesis":
+                report_content = generate_full_report()
+                st.download_button(
+                    "💾 Download Report",
+                    report_content,
+                    file_name="analysis_report.md",
+                    mime="text/markdown",
+                    key=f"download_{hash(content)}"
+                )
 
-        if message_type == "suggestions":
-            st.markdown("### Follow-up Questions")
-            for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
-                if st.button(f"💡 {headline}", key=f"suggest_{idx}_{hash(str(headline))}"):
-                    st.session_state.next_prompt = full_question
-                    st.rerun()
+            if message_type == "suggestions":
+                st.markdown("### Follow-up Questions")
+                for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
+                    if st.button(f"💡 {headline}", key=f"suggest_{idx}_{hash(str(headline))}"):
+                        st.session_state.next_prompt = full_question
+                        st.rerun()
 
 def generate_full_report() -> str:
     """Generate a full report from all messages."""
