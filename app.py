@@ -642,7 +642,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     specialist_response = ""
                     for chunk in orchestrator.agents[domain].generate_response(
                         parts,
-                        previous_responses=synthesis_inputs.copy(),
+                        previous_responses=synthesis_inputs,
                         stream=True
                     ):
                         if chunk:
@@ -658,6 +658,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                             "avatar": get_domain_avatar(domain)
                         }
                         st.session_state.messages.append(specialist_message)
+                        st.session_state.specialist_responses[domain] = specialist_response
                         synthesis_inputs.append({'text': specialist_response})
                         
                         # Update display without full rerun
@@ -668,51 +669,53 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     error_container.error(f"Error with {domain} specialist: {str(e)}")
                     continue
         
-        # Generate final synthesis
-        update_progress("Synthesizing insights...")
-        
-        synthesis = ""
-        for chunk in orchestrator.agents['reasoner'].generate_response(
-            parts,
-            previous_responses=synthesis_inputs,
-            stream=True
-        ):
-            if chunk:
-                synthesis += chunk
-        
-        if synthesis:
-            # Create synthesis message
-            synthesis_message = {
-                "role": "assistant",
-                "type": "synthesis",
-                "content": synthesis,
-                "avatar": "📊"
-            }
-            st.session_state.messages.append(synthesis_message)
+        # Only proceed with synthesis if we have all specialist responses
+        if len(st.session_state.specialist_responses) == len(domains):
+            # Generate final synthesis
+            update_progress("Synthesizing insights...")
             
-            # Update display without full rerun
-            with st.empty():
-                display_message(synthesis_message)
+            synthesis = ""
+            for chunk in orchestrator.agents['reasoner'].generate_response(
+                parts,
+                previous_responses=synthesis_inputs,
+                stream=True
+            ):
+                if chunk:
+                    synthesis += chunk
             
-            # Generate suggestions
-            update_progress("Generating follow-up questions...")
-            try:
-                suggestions = generate_suggestions(synthesis)
-                if suggestions:
-                    suggestions_message = {
-                        "role": "assistant",
-                        "type": "suggestions",
-                        "suggestions": suggestions,
-                        "avatar": "💡"
-                    }
-                    st.session_state.messages.append(suggestions_message)
-                    
-                    # Update display without full rerun
-                    with st.empty():
-                        display_message(suggestions_message)
-            except Exception as e:
-                error_container.error(f"Error generating suggestions: {str(e)}")
-        
+            if synthesis:
+                # Create synthesis message
+                synthesis_message = {
+                    "role": "assistant",
+                    "type": "synthesis",
+                    "content": synthesis,
+                    "avatar": "📊"
+                }
+                st.session_state.messages.append(synthesis_message)
+                
+                # Update display without full rerun
+                with st.empty():
+                    display_message(synthesis_message)
+                
+                # Generate suggestions
+                update_progress("Generating follow-up questions...")
+                try:
+                    suggestions = generate_suggestions(synthesis)
+                    if suggestions:
+                        suggestions_message = {
+                            "role": "assistant",
+                            "type": "suggestions",
+                            "suggestions": suggestions,
+                            "avatar": "💡"
+                        }
+                        st.session_state.messages.append(suggestions_message)
+                        
+                        # Update display without full rerun
+                        with st.empty():
+                            display_message(suggestions_message)
+                except Exception as e:
+                    error_container.error(f"Error generating suggestions: {str(e)}")
+            
         # Update status to complete
         status_container.write("Complete!")
         return synthesis
