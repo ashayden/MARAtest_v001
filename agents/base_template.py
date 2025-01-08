@@ -13,9 +13,10 @@ class RateLimiter:
         self.last_request_time = 0
         self.requests_this_minute = 0
         self.requests_today = 0
-        self.MIN_REQUEST_INTERVAL = 0.1  # 100ms between requests
-        self.MAX_RPM = 30  # Requests per minute
-        self.MAX_RPD = 1000  # Requests per day
+        self.MIN_REQUEST_INTERVAL = 0.5  # 500ms between requests
+        self.MAX_RPM = 10   # Reduced from 30 to 10 requests per minute
+        self.MAX_RPD = 500  # Reduced from 1000 to 500 requests per day
+        self.last_reset_time = time.time()
         
     @classmethod
     def get_instance(cls):
@@ -25,20 +26,38 @@ class RateLimiter:
                     cls._instance = cls()
         return cls._instance
     
+    def _should_reset_counters(self, current_time):
+        """Check if counters should be reset based on time elapsed."""
+        minutes_elapsed = (current_time - self.last_request_time) / 60
+        days_elapsed = (current_time - self.last_reset_time) / (24 * 60 * 60)
+        
+        if minutes_elapsed >= 1:
+            self.requests_this_minute = 0
+            self.last_request_time = current_time
+        
+        if days_elapsed >= 1:
+            self.requests_today = 0
+            self.last_reset_time = current_time
+    
     def wait_if_needed(self):
+        """Check rate limits and wait if necessary."""
         with self._lock:
             current_time = time.time()
+            
+            # Reset counters if needed
+            self._should_reset_counters(current_time)
+            
+            # Check if we've hit the daily limit
+            if self.requests_today >= self.MAX_RPD:
+                raise Exception("Daily request limit reached. Please try again tomorrow.")
             
             # Enforce minimum interval between requests
             time_since_last = current_time - self.last_request_time
             if time_since_last < self.MIN_REQUEST_INTERVAL:
-                time.sleep(self.MIN_REQUEST_INTERVAL - time_since_last)
+                sleep_time = self.MIN_REQUEST_INTERVAL - time_since_last
+                time.sleep(sleep_time)
             
-            # Reset counters if a minute has passed
-            if time_since_last > 60:
-                self.requests_this_minute = 0
-            
-            # Check rate limits
+            # Check if we've hit the per-minute limit
             if self.requests_this_minute >= self.MAX_RPM:
                 sleep_time = 60 - (current_time - self.last_request_time)
                 if sleep_time > 0:

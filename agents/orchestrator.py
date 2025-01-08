@@ -239,59 +239,93 @@ Avoid:
             if normalized_input and isinstance(normalized_input[0], dict) and 'text' in normalized_input[0]:
                 input_text = normalized_input[0]['text']
             
-            # Start initial analysis
-            yield "### INITIAL_ANALYSIS:\n"
-            initial_response = ""
-            for chunk in self.agents['initializer'].generate_response(normalized_input, stream=True):
-                initial_response += chunk
-                if stream:
-                    yield chunk
+            try:
+                # Start initial analysis
+                yield "### INITIAL_ANALYSIS:\n"
+                initial_response = ""
+                for chunk in self.agents['initializer'].generate_response(normalized_input, stream=True):
+                    initial_response += chunk
+                    if stream:
+                        yield chunk
+            except Exception as e:
+                if "RATE_LIMIT_EXCEEDED" in str(e):
+                    yield "Rate limit exceeded. Please wait a moment before trying again."
+                    return
+                else:
+                    yield f"Error in initial analysis: {str(e)}"
+                    return
             
-            # Identify needed specialists
-            domains = self.identify_required_specialists(input_text)
+            try:
+                # Identify needed specialists
+                domains = self.identify_required_specialists(input_text)
+            except Exception as e:
+                if "RATE_LIMIT_EXCEEDED" in str(e):
+                    yield "Rate limit exceeded during specialist identification. Please wait a moment before trying again."
+                    return
+                else:
+                    yield f"Error identifying specialists: {str(e)}"
+                    return
             
             # Initialize specialist responses as dictionary
             specialist_responses = {'initial_analysis': initial_response}
             previous_responses = [initial_response]  # Start with initial analysis
             
             for domain in domains:
-                if domain not in self.agents:
-                    self.agents[domain] = self.create_specialist(domain)
+                try:
+                    if domain not in self.agents:
+                        self.agents[domain] = self.create_specialist(domain)
+                    
+                    # Mark start of specialist response
+                    yield f"\n### SPECIALIST: {domain}\n"
+                    
+                    # Prepare previous responses for this specialist
+                    current_previous_responses = previous_responses.copy()
+                    
+                    specialist_response = ""
+                    for chunk in self.agents[domain].generate_response(
+                        normalized_input,
+                        previous_responses=current_previous_responses,
+                        stream=True
+                    ):
+                        specialist_response += chunk
+                        if stream:
+                            yield chunk
+                    
+                    # Store in dictionary and add to previous responses
+                    specialist_responses[domain] = specialist_response
+                    previous_responses.append(specialist_response)
                 
-                # Mark start of specialist response
-                yield f"\n### SPECIALIST: {domain}\n"
-                
-                # Prepare previous responses for this specialist
-                current_previous_responses = previous_responses.copy()  # Create a copy to avoid modifying the original
-                
-                specialist_response = ""
-                for chunk in self.agents[domain].generate_response(
+                except Exception as e:
+                    if "RATE_LIMIT_EXCEEDED" in str(e):
+                        yield f"\nRate limit exceeded for {domain} specialist. Skipping and continuing with synthesis."
+                        continue
+                    else:
+                        yield f"\nError with {domain} specialist: {str(e)}"
+                        continue
+            
+            try:
+                # Start final synthesis
+                yield "\n### FINAL_SYNTHESIS:\n"
+                synthesis_response = ""
+                for chunk in self.agents['reasoner'].generate_response(
                     normalized_input,
-                    previous_responses=current_previous_responses,
+                    previous_responses=previous_responses,
                     stream=True
                 ):
-                    specialist_response += chunk
+                    synthesis_response += chunk
                     if stream:
                         yield chunk
                 
-                # Store in dictionary and add to previous responses
-                specialist_responses[domain] = specialist_response
-                previous_responses.append(specialist_response)
+                # Add synthesis to responses
+                specialist_responses['final_synthesis'] = synthesis_response
             
-            # Start final synthesis
-            yield "\n### FINAL_SYNTHESIS:\n"
-            synthesis_response = ""
-            for chunk in self.agents['reasoner'].generate_response(
-                normalized_input,
-                previous_responses=previous_responses,  # Pass all responses including initial
-                stream=True
-            ):
-                synthesis_response += chunk
-                if stream:
-                    yield chunk
-            
-            # Add synthesis to responses
-            specialist_responses['final_synthesis'] = synthesis_response
+            except Exception as e:
+                if "RATE_LIMIT_EXCEEDED" in str(e):
+                    yield "\nRate limit exceeded during synthesis. Please wait a moment before trying again."
+                    return
+                else:
+                    yield f"\nError in synthesis: {str(e)}"
+                    return
         
         except Exception as e:
             yield f"Error in agent collaboration: {str(e)}" 
