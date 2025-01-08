@@ -537,27 +537,55 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         # Prepare messages
         parts = prepare_messages(prompt, files_data)
         
-        # Get initial analysis
+        # Get initial analysis with retry logic
         update_progress("Performing initial analysis...")
         
-        initial_response = ""
-        for chunk in orchestrator.agents['initializer'].generate_response(parts, stream=True):
-            if chunk:
-                initial_response += chunk
+        # Get rate limiter instance
+        from agents.base_template import RateLimiter
+        rate_limiter = RateLimiter.get_instance()
         
-        if initial_response:
-            # Create initial analysis message
-            initial_message = {
-                "role": "assistant",
-                "type": "initial_analysis",
-                "content": initial_response,
-                "avatar": "🎯"
-            }
-            st.session_state.messages.append(initial_message)
-            
-            # Update display without full rerun
-            with st.empty():
-                display_message(initial_message)
+        initial_response = None
+        retry_count = 0
+        while retry_count < 3 and not initial_response:
+            try:
+                # Wait for rate limiter with timeout
+                rate_limiter.wait_if_needed(timeout=10)  # 10 second timeout
+                
+                # Reduce tokens for initial analysis
+                orchestrator.agents['initializer'].config.max_output_tokens = 1024
+                
+                initial_response = ""
+                for chunk in orchestrator.agents['initializer'].generate_response(parts, stream=True):
+                    if chunk:
+                        initial_response += chunk
+                
+                if initial_response:
+                    # Create initial analysis message
+                    initial_message = {
+                        "role": "assistant",
+                        "type": "initial_analysis",
+                        "content": initial_response,
+                        "avatar": "🎯"
+                    }
+                    st.session_state.messages.append(initial_message)
+                    
+                    # Update display without full rerun
+                    with st.empty():
+                        display_message(initial_message)
+                
+            except Exception as e:
+                retry_count += 1
+                if retry_count < 3:
+                    error_container.warning(f"Retrying initial analysis (attempt {retry_count + 1}/3)...")
+                    time.sleep(2 ** retry_count)  # Exponential backoff
+                    orchestrator.agents['initializer'].config.max_output_tokens = 512  # Reduce tokens for retry
+                else:
+                    error_container.error("Could not complete initial analysis after 3 attempts.")
+                    return None
+        
+        if not initial_response:
+            error_container.error("Failed to generate initial analysis.")
+            return None
         
         # Extract specialists directly from initial analysis
         specialists = orchestrator.extract_specialists_from_analysis(initial_response)

@@ -170,95 +170,137 @@ Avoid:
             else:
                 normalized_input = [{'text': str(user_input)}]
             
+            # Get rate limiter instance
+            from .base_template import RateLimiter
+            rate_limiter = RateLimiter.get_instance()
+            
             try:
-                # Start initial analysis
+                # Start initial analysis with rate limit handling
                 yield "### INITIAL_ANALYSIS:\n"
                 initial_response = ""
-                for chunk in self.agents['initializer'].generate_response(normalized_input, stream=True):
-                    initial_response += chunk
-                    if stream:
-                        yield chunk
+                
+                # Wait for rate limiter with timeout
+                rate_limiter.wait_if_needed(timeout=10)  # 10 second timeout
+                
+                # Reduce token limit for initial analysis
+                self.agents['initializer'].config.max_output_tokens = 1024
+                
+                # Generate initial analysis with retry logic
+                retry_count = 0
+                while retry_count < 3:
+                    try:
+                        for chunk in self.agents['initializer'].generate_response(normalized_input, stream=True):
+                            if chunk:
+                                initial_response += chunk
+                                if stream:
+                                    yield chunk
+                        break  # Success, exit retry loop
+                    except Exception as e:
+                        retry_count += 1
+                        if retry_count < 3:
+                            # Wait with exponential backoff
+                            time.sleep(2 ** retry_count)
+                            # Reduce tokens for retry
+                            self.agents['initializer'].config.max_output_tokens = 512
+                            continue
+                        else:
+                            raise e
+                
+                if not initial_response:
+                    yield "Error: Could not generate initial analysis after retries."
+                    return
                 
                 # Extract specialists directly from initial analysis
                 specialists = self.extract_specialists_from_analysis(initial_response)
                 
+                if not specialists:
+                    yield "\nNo domain specialists identified. Proceeding with synthesis..."
+                    return
+                
+                # Process specialists in sequence with rate limiting
+                for specialist in specialists[:3]:  # Limit to 3 specialists
+                    domain = specialist['domain']
+                    try:
+                        # Add delay between specialists
+                        time.sleep(2)
+                        rate_limiter.wait_if_needed(timeout=10)
+                        
+                        yield f"\n### SPECIALIST: {domain}\n"
+                        
+                        # Create specialist with reduced token limit
+                        self.agents[domain] = self.create_specialist(
+                            domain=domain,
+                            expertise=specialist['expertise'],
+                            focus_areas=specialist['focus']
+                        )
+                        self.agents[domain].config.max_output_tokens = 1024
+                        
+                        # Generate specialist response with retry
+                        retry_count = 0
+                        while retry_count < 3:
+                            try:
+                                for chunk in self.agents[domain].generate_response(
+                                    normalized_input,
+                                    previous_responses=[initial_response],
+                                    stream=True
+                                ):
+                                    if chunk and stream:
+                                        yield chunk
+                                break  # Success, exit retry loop
+                            except Exception as e:
+                                retry_count += 1
+                                if retry_count < 3:
+                                    time.sleep(2 ** retry_count)
+                                    self.agents[domain].config.max_output_tokens = 512
+                                    continue
+                                else:
+                                    raise e
+                        
+                    except Exception as e:
+                        yield f"\nError with {domain} specialist: {str(e)}"
+                        continue
+                
+                # Generate final synthesis
+                try:
+                    yield "\n### FINAL_SYNTHESIS:\n"
+                    
+                    # Wait for rate limiter
+                    rate_limiter.wait_if_needed(timeout=15)
+                    
+                    # Generate synthesis with retry
+                    retry_count = 0
+                    while retry_count < 3:
+                        try:
+                            for chunk in self.agents['reasoner'].generate_response(
+                                normalized_input,
+                                previous_responses=[initial_response],
+                                stream=True
+                            ):
+                                if chunk and stream:
+                                    yield chunk
+                            break  # Success, exit retry loop
+                        except Exception as e:
+                            retry_count += 1
+                            if retry_count < 3:
+                                time.sleep(2 ** retry_count)
+                                self.agents['reasoner'].config.max_output_tokens = 1024
+                                continue
+                            else:
+                                raise e
+                            
+                except Exception as e:
+                    yield f"\nError in synthesis: {str(e)}"
+                    return
+                
             except Exception as e:
                 if "RATE_LIMIT_EXCEEDED" in str(e):
                     yield "Rate limit exceeded. Please wait a moment before trying again."
-                    return
                 else:
-                    yield f"Error in initial analysis: {str(e)}"
-                    return
+                    yield f"Error in processing: {str(e)}"
+                return
             
-            # Initialize specialist responses
-            specialist_responses = {'initial_analysis': initial_response}
-            
-            # Process specialists in sequence
-            for specialist in specialists:
-                domain = specialist['domain']
-                try:
-                    # Create new specialist with specific expertise
-                    self.agents[domain] = self.create_specialist(
-                        domain=domain,
-                        expertise=specialist['expertise'],
-                        focus_areas=specialist['focus']
-                    )
-                    
-                    # Mark start of specialist response
-                    yield f"\n### SPECIALIST: {domain}\n"
-                    
-                    specialist_response = ""
-                    for chunk in self.agents[domain].generate_response(
-                        normalized_input,
-                        previous_responses=[initial_response],  # Only pass initial analysis
-                        stream=True
-                    ):
-                        specialist_response += chunk
-                        if stream:
-                            yield chunk
-                    
-                    # Store specialist response
-                    specialist_responses[domain] = specialist_response
-                
-                except Exception as e:
-                    if "RATE_LIMIT_EXCEEDED" in str(e):
-                        yield f"\nRate limit exceeded for {domain} specialist. Skipping and continuing with synthesis."
-                        continue
-                    else:
-                        yield f"\nError with {domain} specialist: {str(e)}"
-                        continue
-            
-            try:
-                # Start final synthesis with all responses
-                yield "\n### FINAL_SYNTHESIS:\n"
-                synthesis_response = ""
-                
-                # Prepare all responses for synthesis
-                all_responses = [initial_response]
-                all_responses.extend(specialist_responses[domain] for domain in specialist_responses if domain != 'initial_analysis')
-                
-                for chunk in self.agents['reasoner'].generate_response(
-                    normalized_input,
-                    previous_responses=all_responses,
-                    stream=True
-                ):
-                    synthesis_response += chunk
-                    if stream:
-                        yield chunk
-                
-                # Add synthesis to responses
-                specialist_responses['final_synthesis'] = synthesis_response
-            
-            except Exception as e:
-                if "RATE_LIMIT_EXCEEDED" in str(e):
-                    yield "\nRate limit exceeded during synthesis. Please wait a moment before trying again."
-                    return
-                else:
-                    yield f"\nError in synthesis: {str(e)}"
-                    return
-        
         except Exception as e:
-            yield f"Error in agent collaboration: {str(e)}" 
+            yield f"Error in input processing: {str(e)}" 
 
     def process_with_specialists(self, prompt: str, initial_analysis: str, specialists: list) -> list:
         """Process input with specialists with better rate limit handling."""
