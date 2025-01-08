@@ -517,19 +517,96 @@ def get_domain_avatar(domain: str) -> str:
     }
     return domain_avatars.get(domain.lower(), '🔍')
 
+def display_message(message: dict, container=None):
+    """Display a chat message with clean formatting and streaming support."""
+    role = message.get('role', 'user')
+    content = message.get('content', '')
+    message_type = message.get('type', '')
+    is_streaming = message.get('streaming', False)
+    
+    # Use provided container or create new one
+    msg_container = container or st.chat_message("user" if role == 'user' else "assistant", avatar=message.get("avatar", "🤖"))
+    
+    with msg_container:
+        if role == 'user':
+            st.markdown(content)
+        
+        elif role == 'assistant':
+            # Clean title formatting
+            if message_type == "specialist":
+                domain = message.get("domain", "").replace("_", " ").replace("*", "").strip()
+                title = f"{domain.title()} Specialist"
+            else:
+                title_map = {
+                    "initial_analysis": "Initial Analysis",
+                    "synthesis": "Final Synthesis",
+                    "suggestions": "Follow-up Questions"
+                }
+                title = title_map.get(message_type, "Assistant")
+            
+            # Display title only once at start of streaming
+            if not is_streaming or not content:
+                st.markdown(f"### {title}")
+                st.markdown("---")
+                
+                # Add AI content warning for synthesis
+                if message_type == "synthesis":
+                    st.caption("⚠️ This content is AI-generated and should be reviewed for accuracy.")
+            
+            # Display content (streaming or complete)
+            if content:
+                content = re.sub(r'\*{1,2}([^\*]+)\*{1,2}', r'\1', content)
+                content_placeholder = st.empty()
+                content_placeholder.markdown(content)
+            
+            # Only show actions when streaming is complete
+            if not is_streaming:
+                if message_type == "synthesis":
+                    col1, col2 = st.columns([1, 4])
+                    with col1:
+                        if st.button("📋 Copy", key=f"copy_{message_type}_{hash(content)}_{int(time.time())}"):
+                            copy_to_clipboard(content)
+                    with col2:
+                        report_content = generate_full_report()
+                        st.download_button(
+                            "💾 Download Report",
+                            report_content,
+                            file_name="analysis_report.md",
+                            mime="text/markdown",
+                            key=f"download_{message_type}_{hash(content)}_{int(time.time())}"
+                        )
+                elif message_type == "suggestions":
+                    st.markdown("### Follow-up Questions")
+                    for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
+                        if st.button(f"💡 {headline}", key=f"suggest_{message_type}_{idx}_{hash(str(headline))}_{int(time.time())}"):
+                            st.session_state.next_prompt = full_question
+                            st.rerun()
+                elif message_type != "suggestions":
+                    if st.button("📋 Copy", key=f"copy_{message_type}_{hash(content)}_{int(time.time())}"):
+                        copy_to_clipboard(content)
+    
+    return msg_container
+
+def generate_full_report() -> str:
+    """Generate a full report from all messages."""
+    report_content = "# Analysis Report\n\n"
+    for msg in st.session_state.messages:
+        if msg.get("type") in ["initial_analysis", "specialist", "synthesis"]:
+            report_content += f"## {msg.get('type', '').replace('_', ' ').title()}\n\n"
+            report_content += msg["content"] + "\n\n"
+    return report_content
+
 def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None):
-    """Process input through the collaborative agent system."""
-    # Create containers outside the try block
+    """Process input through the collaborative agent system with streaming support."""
     status_container = st.empty()
     error_container = st.empty()
-    error_details_container = st.empty()
-    synthesis = None  # Initialize synthesis variable
+    synthesis = None
     
     try:
         def update_progress(message):
             status_container.write(message)
         
-        # Reset state for new request
+        # Reset state
         st.session_state.specialist_responses = {}
         st.session_state.current_domains = []
         st.session_state.suggestions = []
@@ -537,198 +614,119 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         # Prepare messages
         parts = prepare_messages(prompt, files_data)
         
-        # Get initial analysis with retry logic
+        # Initial Analysis with streaming
         update_progress("Performing initial analysis...")
+        initial_message = {
+            "role": "assistant",
+            "type": "initial_analysis",
+            "content": "",
+            "avatar": "🎯",
+            "streaming": True
+        }
+        initial_container = display_message(initial_message)
         
-        # Get rate limiter instance
-        from agents.base_template import RateLimiter
-        rate_limiter = RateLimiter.get_instance()
+        initial_response = ""
+        for chunk in orchestrator.agents['initializer'].generate_response(parts, stream=True):
+            if chunk:
+                initial_response += chunk
+                initial_message["content"] = initial_response
+                display_message(initial_message, initial_container)
         
-        initial_response = None
-        retry_count = 0
-        while retry_count < 3 and not initial_response:
-            try:
-                # Wait for rate limiter with timeout
-                rate_limiter.wait_if_needed(timeout=10)  # 10 second timeout
-                
-                # Reduce tokens for initial analysis
-                orchestrator.agents['initializer'].config.max_output_tokens = 1024
-                
-                initial_response = ""
-                for chunk in orchestrator.agents['initializer'].generate_response(parts, stream=True):
-                    if chunk:
-                        initial_response += chunk
-                
-                if initial_response:
-                    # Create initial analysis message
-                    initial_message = {
-                        "role": "assistant",
-                        "type": "initial_analysis",
-                        "content": initial_response,
-                        "avatar": "🎯"
-                    }
-                    st.session_state.messages.append(initial_message)
-                    
-                    # Update display without full rerun
-                    with st.empty():
-                        display_message(initial_message)
-                
-            except Exception as e:
-                retry_count += 1
-                if retry_count < 3:
-                    error_container.warning(f"Retrying initial analysis (attempt {retry_count + 1}/3)...")
-                    time.sleep(2 ** retry_count)  # Exponential backoff
-                    orchestrator.agents['initializer'].config.max_output_tokens = 512  # Reduce tokens for retry
-                else:
-                    error_container.error("Could not complete initial analysis after 3 attempts.")
-                    return None
+        # Update final message
+        initial_message["streaming"] = False
+        initial_message["content"] = initial_response
+        display_message(initial_message, initial_container)
+        st.session_state.messages.append(initial_message)
         
-        if not initial_response:
-            error_container.error("Failed to generate initial analysis.")
-            return None
-        
-        # Extract specialists directly from initial analysis
+        # Process specialists
         specialists = orchestrator.extract_specialists_from_analysis(initial_response)
-        
-        # Process specialist responses
-        synthesis_inputs = [{'text': initial_response}]  # Start with initial analysis
+        synthesis_inputs = [{'text': initial_response}]
         
         if specialists:
-            for i, specialist in enumerate(specialists):
-                try:
-                    domain = specialist['domain']
-                    update_progress(f"Consulting {domain.title()} specialist...")
-                    
-                    # Add delay between specialists
-                    if i > 0:
-                        time.sleep(2)  # 2 second delay between specialists
-                    rate_limiter.wait_if_needed(timeout=10)  # Wait for rate limit with timeout
-                    
-                    # Create specialist with reduced token limit
-                    specialist_agent = orchestrator.create_specialist(
-                        domain=domain,
-                        expertise=specialist['expertise'],
-                        focus_areas=specialist['focus']
-                    )
-                    specialist_agent.config.max_output_tokens = 1024
-                    
-                    # Generate specialist response with retry
-                    retry_count = 0
-                    specialist_response = None
-                    
-                    while retry_count < 3 and not specialist_response:
-                        try:
-                            response_text = ""
-                            for chunk in specialist_agent.generate_response(
-                                parts,
-                                previous_responses=[initial_response],
-                                stream=True
-                            ):
-                                if chunk:
-                                    response_text += chunk
-                            
-                            if response_text:
-                                specialist_response = response_text
-                                # Create specialist message
-                                specialist_message = {
-                                    "role": "assistant",
-                                    "type": "specialist",
-                                    "domain": domain,
-                                    "content": specialist_response,
-                                    "avatar": get_domain_avatar(domain)
-                                }
-                                st.session_state.messages.append(specialist_message)
-                                st.session_state.specialist_responses[domain] = specialist_response
-                                synthesis_inputs.append({'text': specialist_response})
-                                
-                                # Update display without full rerun
-                                with st.empty():
-                                    display_message(specialist_message)
-                            
-                        except Exception as e:
-                            retry_count += 1
-                            if retry_count < 3:
-                                error_container.warning(f"Retrying {domain} specialist (attempt {retry_count + 1}/3)...")
-                                time.sleep(2 ** retry_count)
-                                specialist_agent.config.max_output_tokens = 512
-                            else:
-                                error_container.error(f"Could not complete {domain} specialist analysis after 3 attempts.")
-                    
-                except Exception as e:
-                    error_container.error(f"Error with {domain} specialist: {str(e)}")
-                    continue
+            for specialist in specialists:
+                domain = specialist['domain']
+                update_progress(f"Consulting {domain.title()} specialist...")
+                
+                # Create streaming message
+                specialist_message = {
+                    "role": "assistant",
+                    "type": "specialist",
+                    "domain": domain,
+                    "content": "",
+                    "avatar": get_domain_avatar(domain),
+                    "streaming": True
+                }
+                specialist_container = display_message(specialist_message)
+                
+                # Stream specialist response
+                specialist_response = ""
+                for chunk in orchestrator.process_specialist(specialist, parts, initial_response):
+                    if chunk:
+                        specialist_response += chunk
+                        specialist_message["content"] = specialist_response
+                        display_message(specialist_message, specialist_container)
+                
+                # Update final message
+                if specialist_response:
+                    specialist_message["streaming"] = False
+                    specialist_message["content"] = specialist_response
+                    display_message(specialist_message, specialist_container)
+                    st.session_state.messages.append(specialist_message)
+                    st.session_state.specialist_responses[domain] = specialist_response
+                    synthesis_inputs.append({'text': specialist_response})
         
-        # Only proceed with synthesis if we have specialist responses
+        # Generate synthesis with streaming
         if st.session_state.specialist_responses:
-            # Generate final synthesis
             update_progress("Synthesizing insights...")
+            synthesis_message = {
+                "role": "assistant",
+                "type": "synthesis",
+                "content": "",
+                "avatar": "📊",
+                "streaming": True
+            }
+            synthesis_container = display_message(synthesis_message)
             
             synthesis = ""
-            retry_count = 0
+            for chunk in orchestrator.agents['reasoner'].generate_response(
+                parts,
+                previous_responses=synthesis_inputs,
+                stream=True
+            ):
+                if chunk:
+                    synthesis += chunk
+                    synthesis_message["content"] = synthesis
+                    display_message(synthesis_message, synthesis_container)
             
-            while retry_count < 3 and not synthesis:
+            # Update final synthesis
+            if synthesis:
+                synthesis_message["streaming"] = False
+                synthesis_message["content"] = synthesis
+                display_message(synthesis_message, synthesis_container)
+                st.session_state.messages.append(synthesis_message)
+                
+                # Generate suggestions
+                update_progress("Generating follow-up questions...")
                 try:
-                    rate_limiter.wait_if_needed(timeout=15)  # Wait for rate limit with timeout
-                    
-                    for chunk in orchestrator.agents['reasoner'].generate_response(
-                        parts,
-                        previous_responses=synthesis_inputs,
-                        stream=True
-                    ):
-                        if chunk:
-                            synthesis += chunk
-                    
-                    if synthesis:
-                        # Create synthesis message
-                        synthesis_message = {
+                    suggestions = generate_suggestions(synthesis)
+                    if suggestions:
+                        suggestions_message = {
                             "role": "assistant",
-                            "type": "synthesis",
-                            "content": synthesis,
-                            "avatar": "📊"
+                            "type": "suggestions",
+                            "suggestions": suggestions,
+                            "avatar": "💡"
                         }
-                        st.session_state.messages.append(synthesis_message)
-                        
-                        # Update display without full rerun
-                        with st.empty():
-                            display_message(synthesis_message)
-                        
-                        # Generate suggestions
-                        update_progress("Generating follow-up questions...")
-                        try:
-                            suggestions = generate_suggestions(synthesis)
-                            if suggestions:
-                                suggestions_message = {
-                                    "role": "assistant",
-                                    "type": "suggestions",
-                                    "suggestions": suggestions,
-                                    "avatar": "💡"
-                                }
-                                st.session_state.messages.append(suggestions_message)
-                                
-                                # Update display without full rerun
-                                with st.empty():
-                                    display_message(suggestions_message)
-                        except Exception as e:
-                            error_container.error(f"Error generating suggestions: {str(e)}")
-                    
+                        st.session_state.messages.append(suggestions_message)
+                        display_message(suggestions_message)
                 except Exception as e:
-                    retry_count += 1
-                    if retry_count < 3:
-                        error_container.warning(f"Retrying synthesis (attempt {retry_count + 1}/3)...")
-                        time.sleep(2 ** retry_count)
-                        orchestrator.agents['reasoner'].config.max_output_tokens = 1024
-                    else:
-                        error_container.error("Could not complete synthesis after 3 attempts.")
-                        synthesis = None
+                    error_container.error(f"Error generating suggestions: {str(e)}")
         
-        # Update status to complete
-        status_container.write("Complete!")
+        update_progress("Complete!")
         return synthesis
         
     except Exception as e:
         error_container.error(f"Error: {str(e)}")
-        error_details = st.expander("Show error details")
-        with error_details:
+        with st.expander("Show error details"):
             st.code(traceback.format_exc())
         return None
 
@@ -895,82 +893,6 @@ def chat_interface():
         st.error(f"Error: {str(e)}")
         with st.expander("Show error details"):
             st.code(traceback.format_exc())
-
-def display_message(message: dict):
-    """Display a chat message with clean formatting."""
-    role = message.get('role', 'user')
-    content = message.get('content', '')
-    message_type = message.get('type', '')
-    
-    if role == 'user':
-        with st.chat_message("user"):
-            st.markdown(content)
-    
-    elif role == 'assistant':
-        avatar = message.get("avatar", "🤖")
-        
-        # Clean title formatting
-        if message_type == "specialist":
-            # Remove markdown and clean domain name
-            domain = message.get("domain", "")
-            domain = domain.replace("_", " ").replace("*", "").strip()
-            title = f"{domain.title()} Specialist"
-        else:
-            title_map = {
-                "initial_analysis": "Initial Analysis",
-                "synthesis": "Final Synthesis",
-                "suggestions": "Follow-up Questions"
-            }
-            title = title_map.get(message_type, "Assistant")
-        
-        with st.chat_message("assistant", avatar=avatar):
-            # Display clean title
-            st.markdown(f"### {title}")
-            st.markdown("---")
-            
-            # Add AI content warning for synthesis
-            if message_type == "synthesis":
-                st.caption("⚠️ This content is AI-generated and should be reviewed for accuracy.")
-            
-            # Clean and display content
-            if content:
-                # Remove any markdown artifacts from content
-                content = re.sub(r'\*{1,2}([^\*]+)\*{1,2}', r'\1', content)
-                st.markdown(content)
-            
-            # Handle message actions
-            if message_type == "synthesis":
-                col1, col2 = st.columns([1, 4])
-                with col1:
-                    if st.button("📋 Copy", key=f"copy_{message_type}_{hash(content)}_{int(time.time())}"):
-                        copy_to_clipboard(content)
-                with col2:
-                    report_content = generate_full_report()
-                    st.download_button(
-                        "💾 Download Report",
-                        report_content,
-                        file_name="analysis_report.md",
-                        mime="text/markdown",
-                        key=f"download_{message_type}_{hash(content)}_{int(time.time())}"
-                    )
-            elif message_type == "suggestions":
-                st.markdown("### Follow-up Questions")
-                for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
-                    if st.button(f"💡 {headline}", key=f"suggest_{message_type}_{idx}_{hash(str(headline))}_{int(time.time())}"):
-                        st.session_state.next_prompt = full_question
-                        st.rerun()
-            elif message_type != "suggestions":
-                if st.button("📋 Copy", key=f"copy_{message_type}_{hash(content)}_{int(time.time())}"):
-                    copy_to_clipboard(content)
-
-def generate_full_report() -> str:
-    """Generate a full report from all messages."""
-    report_content = "# Analysis Report\n\n"
-    for msg in st.session_state.messages:
-        if msg.get("type") in ["initial_analysis", "specialist", "synthesis"]:
-            report_content += f"## {msg.get('type', '').replace('_', ' ').title()}\n\n"
-            report_content += msg["content"] + "\n\n"
-    return report_content
 
 if __name__ == "__main__":
     # Load environment variables

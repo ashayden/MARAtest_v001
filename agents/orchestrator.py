@@ -438,3 +438,60 @@ Avoid:
                     
         except Exception as e:
             return f"Error in synthesis: {str(e)}" 
+
+    def process_specialist(self, specialist: dict, input_parts: list, initial_analysis: str) -> Generator[str, None, None]:
+        """Process a single specialist with streaming support."""
+        try:
+            # Get rate limiter instance
+            from .base_template import RateLimiter
+            rate_limiter = RateLimiter.get_instance()
+            
+            # Calculate expected token count
+            expected_tokens = len(initial_analysis.split()) + len(str(input_parts).split())
+            
+            # Wait with exponential backoff if needed
+            rate_limiter.wait_if_needed(
+                timeout=15,  # 15 second timeout
+                token_count=expected_tokens,
+                attempt=0
+            )
+            
+            # Create specialist with reduced token limit
+            domain = specialist['domain']
+            specialist_agent = self.create_specialist(
+                domain=domain,
+                expertise=specialist.get('expertise', ''),
+                focus_areas=specialist.get('focus', '')
+            )
+            specialist_agent.config.max_output_tokens = 1024  # Limit tokens
+            
+            # Generate response with retry logic
+            retry_count = 0
+            while retry_count < 3:
+                try:
+                    # Stream response chunks
+                    for chunk in specialist_agent.generate_response(
+                        input_parts,
+                        previous_responses=[initial_analysis],
+                        stream=True
+                    ):
+                        if chunk:
+                            yield chunk
+                    break  # Success, exit retry loop
+                    
+                except Exception as e:
+                    retry_count += 1
+                    if retry_count < 3:
+                        # Reduce tokens and wait before retry
+                        specialist_agent.config.max_output_tokens = 512
+                        time.sleep(2 ** retry_count)
+                        continue
+                    else:
+                        yield f"\nError with {domain} specialist after {retry_count} retries: {str(e)}"
+                        break
+            
+            # Add delay after specialist
+            time.sleep(2)
+            
+        except Exception as e:
+            yield f"\nError processing {specialist.get('domain', 'unknown')} specialist: {str(e)}" 
