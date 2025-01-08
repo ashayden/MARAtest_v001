@@ -819,23 +819,29 @@ def display_message(message: dict):
             st.markdown(content)
 
             if message_type != "suggestions":
-                if st.button("📋 Copy", key=f"copy_{hash(content)}"):
+                # Create a unique key using message type, content hash, and timestamp
+                unique_key = f"copy_{message_type}_{hash(content)}_{int(time.time())}"
+                if st.button("📋 Copy", key=unique_key):
                     copy_to_clipboard(content)
 
             if message_type == "synthesis":
                 report_content = generate_full_report()
+                # Create a unique key for download button
+                download_key = f"download_{message_type}_{hash(content)}_{int(time.time())}"
                 st.download_button(
                     "💾 Download Report",
                     report_content,
                     file_name="analysis_report.md",
                     mime="text/markdown",
-                    key=f"download_{hash(content)}"
+                    key=download_key
                 )
 
             if message_type == "suggestions":
                 st.markdown("### Follow-up Questions")
                 for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
-                    if st.button(f"💡 {headline}", key=f"suggest_{idx}_{hash(str(headline))}"):
+                    # Create a unique key for each suggestion button
+                    suggestion_key = f"suggest_{message_type}_{idx}_{hash(str(headline))}_{int(time.time())}"
+                    if st.button(f"💡 {headline}", key=suggestion_key):
                         st.session_state.next_prompt = full_question
                         st.rerun()
 
