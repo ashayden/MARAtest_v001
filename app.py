@@ -626,9 +626,6 @@ def generate_full_report() -> str:
 
 def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None):
     """Process input through the collaborative agent system with streaming support."""
-    status_container = st.empty()
-    error_container = st.empty()
-    
     try:
         # Reset state
         st.session_state.specialist_responses = {}
@@ -641,6 +638,8 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         # Process through orchestrator
         current_container = None
         current_message = None
+        status_container = st.empty()
+        error_container = st.empty()
         
         for message in orchestrator.process_input(parts[0]['text']):
             message_type = message.get('type')
@@ -648,7 +647,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             if message_type == 'status':
                 status_container.write(message['content'])
                 continue
-                
+            
             if message_type == 'error':
                 error_container.error(f"Error: {message['content']}")
                 continue
@@ -660,14 +659,18 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                         "role": "assistant",
                         "type": message_type,
                         "content": message['content'],
-                        "avatar": message.get('avatar', '🤖'),
                         "streaming": message['streaming']
                     }
                     
                     if message_type == 'specialist':
                         current_message['domain'] = message['domain']
+                        current_message['avatar'] = message['avatar']
                     
                     current_container = display_message(current_message)
+                    
+                    # Store specialist responses for synthesis
+                    if message_type == 'specialist' and not message['streaming']:
+                        st.session_state.specialist_responses[message['domain']] = message['content']
                 else:
                     # Update existing message
                     current_message['content'] = message['content']
@@ -677,8 +680,6 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 # Store completed messages
                 if not message['streaming']:
                     st.session_state.messages.append(current_message)
-                    if message_type == 'specialist':
-                        st.session_state.specialist_responses[message['domain']] = message['content']
                     current_message = None
                     current_container = None
             

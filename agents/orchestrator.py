@@ -47,10 +47,14 @@ class AgentOrchestrator:
                 "content": "Performing initial analysis..."
             }
             
-            initial_analysis = yield from self._generate_initial_analysis(prompt)
+            initial_analysis = ""
+            for message in self._generate_initial_analysis(prompt):
+                initial_analysis = message["content"]
+                yield message
             
             # Extract and process specialists
             specialists = self._extract_specialists(initial_analysis)
+            specialist_responses = []
             
             for specialist in specialists:
                 yield {
@@ -58,14 +62,22 @@ class AgentOrchestrator:
                     "content": f"Consulting {specialist['domain'].title()} specialist..."
                 }
                 
-                specialist_response = yield from self._generate_specialist_response(
+                specialist_response = ""
+                for message in self._generate_specialist_response(
                     specialist=specialist,
                     prompt=prompt,
                     initial_analysis=initial_analysis
-                )
+                ):
+                    specialist_response = message["content"]
+                    yield message
+                
+                specialist_responses.append({
+                    'domain': specialist['domain'],
+                    'content': specialist_response
+                })
                 
                 # Add delay between specialists
-                time.sleep(2)
+                time.sleep(1)
             
             # Generate synthesis
             if specialists:
@@ -74,10 +86,13 @@ class AgentOrchestrator:
                     "content": "Synthesizing insights..."
                 }
                 
-                synthesis = yield from self._generate_synthesis_response(
+                synthesis = ""
+                for message in self._generate_synthesis_response(
                     prompt=prompt,
-                    specialists=specialists
-                )
+                    specialists=specialist_responses
+                ):
+                    synthesis = message["content"]
+                    yield message
                 
                 yield {
                     "type": "status",
@@ -102,7 +117,7 @@ class AgentOrchestrator:
                 "content": str(e)
             }
     
-    def _generate_initial_analysis(self, prompt: str) -> Generator[str, None, None]:
+    def _generate_initial_analysis(self, prompt: str) -> Generator[Dict[str, any], None, None]:
         """Generate initial analysis with streaming."""
         model = genai.GenerativeModel(
             'gemini-2.0-flash-exp',
@@ -213,174 +228,187 @@ class AgentOrchestrator:
                                    prompt: str,
                                    initial_analysis: str) -> Generator[Dict[str, any], None, None]:
         """Generate specialist response with streaming."""
-        model = genai.GenerativeModel(
-            'gemini-2.0-flash-exp',
-            generation_config=self._specialist_config
-        )
-        
-        prompt_template = """As a domain expert in {expertise}, provide a focused analysis of the following topic.
-        
-        Your role is to:
-        1. Apply deep domain knowledge to the assigned aspect
-        2. Provide detailed, evidence-based insights
-        3. Identify patterns and implications within your domain
-        4. Connect your analysis to broader context
-        5. Highlight critical factors other specialists should consider
-        
-        Analysis requirements:
-        - Maintain academic rigor and depth
-        - Support claims with clear reasoning
-        - Consider historical context and future implications
-        - Address potential challenges and opportunities
-        - Identify areas needing further investigation
-        
-        Follow these strict markdown formatting rules:
-        1. Start with a creative title using a single '#' header
-        2. Use '###' for main section headers
-        3. Use '####' for subsection headers
-        4. Use '**' for bold text (not __ or ***)
-        5. Use '*' for italic text (not _)
-        6. Use '- ' for bullet points
-        7. Use '1. ' style for numbered lists
-        8. Add blank lines before and after headers
-        9. Use consistent spacing (single blank line between paragraphs)
-        10. Do not use horizontal rules or other decorative elements
-        
-        Format your response as:
-        # [Creative Topic-Specific Title]
-        
-        ### [First Main Section]
-        [Analysis with proper markdown formatting]
-        
-        ### [Second Main Section]
-        [Analysis with proper markdown formatting]
-        
-        Topic to analyze: {prompt}
-        
-        Consider this context:
-        {initial_analysis}
-        
-        Focus your analysis on: {focus}
-        """
-        
-        response = model.generate_content(
-            prompt_template.format(
-                domain=specialist['domain'],
-                expertise=specialist['expertise'],
-                focus=specialist['focus'],
-                prompt=prompt,
-                initial_analysis=initial_analysis
-            ),
-            stream=True
-        )
-        
-        full_response = ""
-        for chunk in response:
-            if chunk.text:
-                full_response += chunk.text
-                yield {
-                    "type": "specialist",
-                    "content": full_response,
-                    "domain": specialist['domain'],
-                    "avatar": specialist['avatar'],
-                    "streaming": True
-                }
-        
-        yield {
-            "type": "specialist",
-            "content": full_response,
-            "domain": specialist['domain'],
-            "avatar": specialist['avatar'],
-            "streaming": False
-        }
-        
-        return full_response
+        try:
+            model = genai.GenerativeModel(
+                'gemini-2.0-flash-exp',
+                generation_config=self._specialist_config
+            )
+            
+            prompt_template = """As a domain expert in {expertise}, provide a focused analysis of the following topic.
+            
+            Your role is to:
+            1. Apply deep domain knowledge to the assigned aspect
+            2. Provide detailed, evidence-based insights
+            3. Identify patterns and implications within your domain
+            4. Connect your analysis to broader context
+            5. Highlight critical factors other specialists should consider
+            
+            Analysis requirements:
+            - Maintain academic rigor and depth
+            - Support claims with clear reasoning
+            - Consider historical context and future implications
+            - Address potential challenges and opportunities
+            - Identify areas needing further investigation
+            
+            Follow these strict markdown formatting rules:
+            1. Start with a creative title using a single '#' header
+            2. Use '###' for main section headers
+            3. Use '####' for subsection headers
+            4. Use '**' for bold text (not __ or ***)
+            5. Use '*' for italic text (not _)
+            6. Use '- ' for bullet points
+            7. Use '1. ' style for numbered lists
+            8. Add blank lines before and after headers
+            9. Use consistent spacing (single blank line between paragraphs)
+            10. Do not use horizontal rules or other decorative elements
+            
+            Format your response as:
+            # [Creative Topic-Specific Title]
+            
+            ### [First Main Section]
+            [Analysis with proper markdown formatting]
+            
+            ### [Second Main Section]
+            [Analysis with proper markdown formatting]
+            
+            Topic to analyze: {prompt}
+            
+            Consider this context:
+            {initial_analysis}
+            
+            Focus your analysis on: {focus}
+            """
+            
+            response = model.generate_content(
+                prompt_template.format(
+                    domain=specialist['domain'],
+                    expertise=specialist['expertise'],
+                    focus=specialist['focus'],
+                    prompt=prompt,
+                    initial_analysis=initial_analysis
+                ),
+                stream=True
+            )
+            
+            full_response = ""
+            for chunk in response:
+                if chunk.text:
+                    full_response += chunk.text
+                    yield {
+                        "type": "specialist",
+                        "content": full_response,
+                        "domain": specialist['domain'],
+                        "avatar": specialist['avatar'],
+                        "streaming": True
+                    }
+            
+            # Ensure final message is properly formatted
+            yield {
+                "type": "specialist",
+                "content": full_response,
+                "domain": specialist['domain'],
+                "avatar": specialist['avatar'],
+                "streaming": False
+            }
+            
+        except Exception as e:
+            yield {
+                "type": "error",
+                "content": f"Error in specialist response: {str(e)}"
+            }
     
     def _generate_synthesis_response(self,
                                    prompt: str,
                                    specialists: List[Dict[str, str]]) -> Generator[Dict[str, any], None, None]:
         """Generate synthesis response with streaming."""
-        model = genai.GenerativeModel(
-            'gemini-2.0-flash-exp',
-            generation_config=self._synthesis_config
-        )
-        
-        specialist_info = "\n".join(
-            f"- {s['expertise']}"
-            for s in specialists
-        )
-        
-        prompt_template = """Create a comprehensive synthesis integrating insights from multiple domain experts.
-        
-        Your role is to:
-        1. Identify key patterns and themes across specialist analyses
-        2. Highlight important interconnections between domains
-        3. Draw meaningful conclusions from combined insights
-        4. Present a cohesive narrative that bridges perspectives
-        5. Identify broader implications and future directions
-        
-        Synthesis requirements:
-        - Maintain balanced representation of all perspectives
-        - Identify points of convergence and divergence
-        - Draw evidence-based conclusions
-        - Address complexity and nuance
-        - Suggest practical applications and next steps
-        
-        Topic: {prompt}
-        
-        Drawing from these areas of expertise:
-        {specialist_info}
-        
-        Follow these strict markdown formatting rules:
-        1. Start with a creative title using a single '#' header
-        2. Use '###' for main section headers
-        3. Use '####' for subsection headers
-        4. Use '**' for bold text (not __ or ***)
-        5. Use '*' for italic text (not _)
-        6. Use '- ' for bullet points
-        7. Use '1. ' style for numbered lists
-        8. Add blank lines before and after headers
-        9. Use consistent spacing (single blank line between paragraphs)
-        10. Do not use horizontal rules or other decorative elements
-        
-        Format your response as:
-        # [Creative Topic-Specific Title]
-        
-        ### Key Insights
-        [Integrated analysis with proper markdown formatting]
-        
-        ### Synthesis of Perspectives
-        [Combined insights with proper markdown formatting]
-        
-        ### Conclusions and Implications
-        [Final analysis with proper markdown formatting]
-        """
-        
-        response = model.generate_content(
-            prompt_template.format(
-                prompt=prompt,
-                specialist_info=specialist_info
-            ),
-            stream=True
-        )
-        
-        full_response = ""
-        for chunk in response:
-            if chunk.text:
-                full_response += chunk.text
-                yield {
-                    "type": "synthesis",
-                    "content": full_response,
-                    "streaming": True
-                }
-        
-        yield {
-            "type": "synthesis",
-            "content": full_response,
-            "streaming": False
-        }
-        
-        return full_response
+        try:
+            model = genai.GenerativeModel(
+                'gemini-2.0-flash-exp',
+                generation_config=self._synthesis_config
+            )
+            
+            # Format specialist insights for context
+            specialist_info = "\n\n".join(
+                f"### {s['domain'].title()} Insights:\n{s['content']}"
+                for s in specialists
+            )
+            
+            prompt_template = """Create a comprehensive synthesis integrating insights from multiple domain experts.
+            
+            Your role is to:
+            1. Identify key patterns and themes across specialist analyses
+            2. Highlight important interconnections between domains
+            3. Draw meaningful conclusions from combined insights
+            4. Present a cohesive narrative that bridges perspectives
+            5. Identify broader implications and future directions
+            
+            Synthesis requirements:
+            - Maintain balanced representation of all perspectives
+            - Identify points of convergence and divergence
+            - Draw evidence-based conclusions
+            - Address complexity and nuance
+            - Suggest practical applications and next steps
+            
+            Topic: {prompt}
+            
+            Specialist Insights:
+            {specialist_info}
+            
+            Follow these strict markdown formatting rules:
+            1. Start with a creative title using a single '#' header
+            2. Use '###' for main section headers
+            3. Use '####' for subsection headers
+            4. Use '**' for bold text (not __ or ***)
+            5. Use '*' for italic text (not _)
+            6. Use '- ' for bullet points
+            7. Use '1. ' style for numbered lists
+            8. Add blank lines before and after headers
+            9. Use consistent spacing (single blank line between paragraphs)
+            10. Do not use horizontal rules or other decorative elements
+            
+            Format your response as:
+            # [Creative Topic-Specific Title]
+            
+            ### Key Insights
+            [Integrated analysis with proper markdown formatting]
+            
+            ### Synthesis of Perspectives
+            [Combined insights with proper markdown formatting]
+            
+            ### Conclusions and Implications
+            [Final analysis with proper markdown formatting]
+            """
+            
+            response = model.generate_content(
+                prompt_template.format(
+                    prompt=prompt,
+                    specialist_info=specialist_info
+                ),
+                stream=True
+            )
+            
+            full_response = ""
+            for chunk in response:
+                if chunk.text:
+                    full_response += chunk.text
+                    yield {
+                        "type": "synthesis",
+                        "content": full_response,
+                        "streaming": True
+                    }
+            
+            # Ensure final message is properly formatted
+            yield {
+                "type": "synthesis",
+                "content": full_response,
+                "streaming": False
+            }
+            
+        except Exception as e:
+            yield {
+                "type": "error",
+                "content": f"Error in synthesis: {str(e)}"
+            }
     
     def _generate_suggestions(self, content: str) -> List[tuple]:
         """Generate follow-up suggestions."""
