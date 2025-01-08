@@ -325,6 +325,8 @@ class AgentOrchestrator:
         try:
             prompt_template = """Analyze the following topic and provide a structured analysis.
 
+            IMPORTANT: Start with the title at the very top of the document.
+
             Content Requirements:
             1. Identify key aspects requiring domain expertise
             2. Break down complex topics into focused areas
@@ -332,7 +334,7 @@ class AgentOrchestrator:
             4. Set foundation for specialist analysis
 
             Strict Formatting Rules:
-            1. Title: Single '#' at the top of the document
+            1. Title: Must be the first line, using single '#'
             2. Main Sections: '##' for top-level sections
             3. Subsections: '###' for subsections
             4. Lists: Use '- ' for all bullet points
@@ -341,18 +343,18 @@ class AgentOrchestrator:
             7. Numbers: Use '1. ' format for numbered lists
             8. Headers: No periods after numbers in headers
             9. Consistency: Same formatting style throughout
-            10. Structure: Clear hierarchy (Title → Sections → Subsections)
+            10. Structure: Title → Main Sections → Subsections
 
             Required Document Structure:
-            # [Title]
+            # [Title] (MUST BE FIRST LINE)
 
-            ## [First Main Section]
+            ## Overview
             [Content with proper formatting]
 
-            ## [Second Main Section]
+            ## Analysis
             [Content with proper formatting]
 
-            ## [Third Main Section]
+            ## Implications
             [Content with proper formatting]
 
             Topic: {prompt}
@@ -394,6 +396,8 @@ class AgentOrchestrator:
         try:
             specialist_template = """As a domain expert in {expertise}, analyze the following topic.
 
+            IMPORTANT: Start with the title at the very top of the document.
+
             Expert Analysis Requirements:
             1. Apply deep domain knowledge
             2. Provide evidence-based insights
@@ -402,7 +406,7 @@ class AgentOrchestrator:
             5. Highlight critical factors
 
             Strict Formatting Rules:
-            1. Title: Single '#' at the top of the document
+            1. Title: Must be the first line, using single '#'
             2. Main Sections: '##' for top-level sections
             3. Subsections: '###' for subsections
             4. Lists: Use '- ' for all bullet points
@@ -411,10 +415,10 @@ class AgentOrchestrator:
             7. Numbers: Use '1. ' format for numbered lists
             8. Headers: No periods after numbers in headers
             9. Consistency: Same formatting style throughout
-            10. Structure: Clear hierarchy (Title → Sections → Subsections)
+            10. Structure: Title → Main Sections → Subsections
 
             Required Document Structure:
-            # [Title]
+            # [Title] (MUST BE FIRST LINE)
 
             ## Analysis
             [Main analysis with proper formatting]
@@ -480,6 +484,8 @@ class AgentOrchestrator:
             
             synthesis_template = """Create a comprehensive synthesis of expert analyses.
 
+            IMPORTANT: Start with the title at the very top of the document.
+
             Synthesis Requirements:
             1. Integrate key patterns across analyses
             2. Highlight interconnections
@@ -488,7 +494,7 @@ class AgentOrchestrator:
             5. Identify implications
 
             Strict Formatting Rules:
-            1. Title: Single '#' at the top of the document
+            1. Title: Must be the first line, using single '#'
             2. Main Sections: '##' for top-level sections
             3. Subsections: '###' for subsections
             4. Lists: Use '- ' for all bullet points
@@ -497,10 +503,10 @@ class AgentOrchestrator:
             7. Numbers: Use '1. ' format for numbered lists
             8. Headers: No periods after numbers in headers
             9. Consistency: Same formatting style throughout
-            10. Structure: Clear hierarchy (Title → Sections → Subsections)
+            10. Structure: Title → Main Sections → Subsections
 
             Required Document Structure:
-            # [Title]
+            # [Title] (MUST BE FIRST LINE)
 
             ## Key Findings
             [Integrated analysis with proper formatting]
