@@ -525,11 +525,22 @@ def display_message(message: dict, container=None):
     is_streaming = message.get('streaming', False)
     
     # Use provided container or create new one
-    msg_container = container or st.chat_message("user" if role == 'user' else "assistant", avatar=message.get("avatar", "🤖"))
+    if container is None:
+        container = st.chat_message("user" if role == 'user' else "assistant", avatar=message.get("avatar", "🤖"))
     
-    with msg_container:
+    # Store placeholders in session state to persist across reruns
+    container_id = str(id(container))
+    placeholder_key = f"placeholder_{container_id}"
+    title_key = f"title_shown_{container_id}"
+    
+    if placeholder_key not in st.session_state:
+        st.session_state[placeholder_key] = container.empty()
+    if title_key not in st.session_state:
+        st.session_state[title_key] = False
+    
+    with container:
         if role == 'user':
-            st.markdown(content)
+            st.session_state[placeholder_key].markdown(content)
         
         elif role == 'assistant':
             # Clean title formatting
@@ -544,28 +555,25 @@ def display_message(message: dict, container=None):
                 }
                 title = title_map.get(message_type, "Assistant")
             
-            # Display title only once at start of streaming
-            if not is_streaming or not hasattr(msg_container, '_title_shown'):
-                st.markdown(f"### {title}")
-                st.markdown("---")
-                setattr(msg_container, '_title_shown', True)
+            # Display title only once
+            if not st.session_state[title_key]:
+                container.markdown(f"### {title}")
+                container.markdown("---")
+                st.session_state[title_key] = True
                 
                 # Add AI content warning for synthesis
                 if message_type == "synthesis":
-                    st.caption("⚠️ This content is AI-generated and should be reviewed for accuracy.")
+                    container.caption("⚠️ This content is AI-generated and should be reviewed for accuracy.")
             
             # Display content (streaming or complete)
             if content:
                 content = re.sub(r'\*{1,2}([^\*]+)\*{1,2}', r'\1', content)
-                # Use a placeholder for content to avoid flickering
-                if not hasattr(msg_container, '_content_placeholder'):
-                    setattr(msg_container, '_content_placeholder', st.empty())
-                msg_container._content_placeholder.markdown(content)
+                st.session_state[placeholder_key].markdown(content)
             
             # Only show actions when streaming is complete
             if not is_streaming:
                 if message_type == "synthesis":
-                    col1, col2 = st.columns([1, 4])
+                    col1, col2 = container.columns([1, 4])
                     with col1:
                         if st.button("📋 Copy", key=f"copy_{message_type}_{hash(content)}_{int(time.time())}"):
                             copy_to_clipboard(content)
@@ -579,7 +587,7 @@ def display_message(message: dict, container=None):
                             key=f"download_{message_type}_{hash(content)}_{int(time.time())}"
                         )
                 elif message_type == "suggestions":
-                    st.markdown("### Follow-up Questions")
+                    container.markdown("### Follow-up Questions")
                     for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
                         if st.button(f"💡 {headline}", key=f"suggest_{message_type}_{idx}_{hash(str(headline))}_{int(time.time())}"):
                             st.session_state.next_prompt = full_question
@@ -588,7 +596,7 @@ def display_message(message: dict, container=None):
                     if st.button("📋 Copy", key=f"copy_{message_type}_{hash(content)}_{int(time.time())}"):
                         copy_to_clipboard(content)
     
-    return msg_container
+    return container
 
 def generate_full_report() -> str:
     """Generate a full report from all messages."""
