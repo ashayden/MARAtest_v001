@@ -517,7 +517,7 @@ def display_message(message: dict, container=None):
     
     # Use provided container or create new one
     if container is None:
-        container = st.chat_message("user" if role == 'user' else "assistant", avatar=message.get("avatar", "🤖"))
+        container = st.chat_message("user" if role == 'user' else "assistant")
     
     # Store placeholders in session state to persist across reruns
     container_id = str(id(container))
@@ -531,36 +531,33 @@ def display_message(message: dict, container=None):
             st.session_state[content_key].markdown(content)
         
         elif role == 'assistant':
-            # Clean title formatting
-            if message_type == "specialist":
-                domain = message.get("domain", "").replace("_", " ").replace("*", "").strip()
-                title = f"{domain.title()} Specialist"
-            else:
-                title_map = {
-                    "initial_analysis": "Initial Analysis",
-                    "synthesis": "Final Synthesis",
-                    "suggestions": "Follow-up Questions"
-                }
-                title = title_map.get(message_type, "Assistant")
-            
-            # Display title at the top of the container
-            if not is_streaming or content == "":
+            # Generate creative title based on content
+            if not is_streaming and content:
+                # Extract first line or section header for title
+                first_line = content.split('\n')[0].strip()
+                if first_line.startswith('#'):
+                    title = first_line.lstrip('#').strip()
+                else:
+                    # Generate a title from first sentence
+                    title = first_line[:50] + ('...' if len(first_line) > 50 else '')
+                
                 container.markdown(f"### {title}")
                 container.markdown("---")
             
-            # Add AI content warning for synthesis
-            if message_type == "synthesis":
-                container.caption("⚠️ This content is AI-generated and should be reviewed for accuracy.")
-            
-            # Display content (streaming or complete)
+            # Clean and format content
             if content:
-                # Remove any markdown titles from the content
-                content = re.sub(r'#+ .*?\n', '', content)
-                # Remove markdown formatting from text
+                # Remove any existing titles/headers
+                content = re.sub(r'^#+ .*$', '', content, flags=re.MULTILINE)
+                # Remove AI/specialist references
+                content = re.sub(r'(?i)(AI|artificial intelligence|specialist|expert).*?analysis', '', content)
                 content = re.sub(r'\*{1,2}([^\*]+)\*{1,2}', r'\1', content)
+                
+                # Format sections consistently
+                content = re.sub(r'^(\d+\.)', r'### \1', content, flags=re.MULTILINE)
+                
                 st.session_state[content_key].markdown(content)
             
-            # Only show actions when streaming is complete
+            # Show actions when streaming is complete
             if not is_streaming:
                 if message_type == "synthesis":
                     col1, col2 = container.columns([1, 4])

@@ -110,9 +110,11 @@ class AgentOrchestrator:
         )
         
         prompt_template = """Analyze the following topic and provide a structured analysis with exactly 3 main sections.
-        Each section should focus on a key aspect that requires specialist expertise.
+        Each section should focus on a key aspect that requires deeper investigation.
         
-        Format your response with numbered sections like this:
+        Format your response with a creative title followed by numbered sections:
+        [Creative Topic-Specific Title]
+        
         1. [First Key Aspect]: [detailed analysis]
         2. [Second Key Aspect]: [detailed analysis]
         3. [Third Key Aspect]: [detailed analysis]
@@ -189,18 +191,20 @@ class AgentOrchestrator:
             generation_config=self._specialist_config
         )
         
-        prompt_template = """You are an expert {domain} specialist with expertise in {expertise}.
+        prompt_template = """Based on your expertise in {expertise}, provide a focused analysis of the following topic.
         
-        Focus your analysis on: {focus}
+        Format your response with a creative title that captures the essence of your analysis, followed by clear sections.
+        Begin with:
+        [Creative Topic-Specific Title]
         
-        Analyze the following topic from your specialist perspective:
-        {prompt}
+        Then organize your insights into 2-3 clear sections, each with a descriptive subheading.
         
-        Consider this initial analysis:
+        Topic to analyze: {prompt}
+        
+        Consider this context:
         {initial_analysis}
         
-        Provide a detailed specialist analysis focusing on your domain expertise.
-        Format your response with clear sections and maintain an academic tone.
+        Focus your analysis on: {focus}
         """
         
         response = model.generate_content(
@@ -246,24 +250,23 @@ class AgentOrchestrator:
         )
         
         specialist_info = "\n".join(
-            f"- {s['domain'].title()} Specialist: expertise in {s['expertise']}"
+            f"- {s['expertise']}"
             for s in specialists
         )
         
-        prompt_template = """Create a comprehensive synthesis report for the following topic:
+        prompt_template = """Create a comprehensive synthesis for the following topic:
         {prompt}
         
-        Incorporating insights from these specialists:
+        Drawing from these areas of expertise:
         {specialist_info}
         
-        Requirements:
-        1. Begin with a clear title
-        2. Organize content in numbered sections
-        3. Integrate specialist perspectives
-        4. Maintain academic tone
-        5. End with key conclusions
+        Format your response with:
+        1. A creative, topic-specific title
+        2. Clear section headings
+        3. Integrated perspectives from each area
+        4. Key conclusions
         
-        Format the report in markdown with clear section headings.
+        Use markdown formatting for clear organization.
         """
         
         response = model.generate_content(
