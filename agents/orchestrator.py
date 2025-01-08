@@ -15,13 +15,6 @@ class AgentOrchestrator:
         self._rate_limiter = RateLimiter.get_instance()
         self._chunk_buffer_size = 50
         self._max_retries = 3
-        self.state_manager = StateManager()
-        
-        # Initialize agents dictionary
-        self.agents = {
-            'initializer': genai.GenerativeModel('gemini-2.0-flash-exp'),
-            'reasoner': genai.GenerativeModel('gemini-2.0-flash-exp')
-        }
         
         # Initialize model configurations
         self._initializer_config = {
@@ -45,96 +38,69 @@ class AgentOrchestrator:
             'max_output_tokens': 2048
         }
     
-    def process_with_streaming(self, 
-                             prompt: str, 
-                             message_id: str, 
-                             timeout: Optional[float] = None) -> bool:
-        """Process input with proper streaming support and error handling."""
+    def process_input(self, prompt: str) -> Generator[Dict[str, any], None, None]:
+        """Process input and yield messages for display."""
         try:
-            # Initialize message
-            self.state_manager.update_message(
-                message_id=message_id,
-                content="",
-                is_complete=False,
-                message_type="processing"
-            )
+            # Initial Analysis
+            yield {
+                "type": "status",
+                "content": "Performing initial analysis..."
+            }
             
-            chunk_buffer = []
-            retry_count = 0
+            initial_analysis = yield from self._generate_initial_analysis(prompt)
             
-            while retry_count < self._max_retries:
-                try:
-                    # Wait for rate limit with timeout
-                    if not self._rate_limiter.wait_if_needed(timeout):
-                        raise TimeoutError("Rate limit timeout exceeded")
-                    
-                    # Generate initial analysis
-                    for chunk in self._generate_initial_analysis(prompt):
-                        if chunk:
-                            chunk_buffer.append(chunk)
-                            
-                            # Update state when buffer is full
-                            if len(chunk_buffer) >= self._chunk_buffer_size:
-                                combined_chunk = "".join(chunk_buffer)
-                                self.state_manager.update_message(
-                                    message_id=message_id,
-                                    content=combined_chunk,
-                                    is_complete=False
-                                )
-                                chunk_buffer = []
-                                st.rerun()
-                    
-                    # Process final buffer
-                    if chunk_buffer:
-                        final_chunk = "".join(chunk_buffer)
-                        initial_analysis = self.state_manager.update_message(
-                            message_id=message_id,
-                            content=final_chunk,
-                            is_complete=True
-                        )
-                        
-                        # Extract and process specialists
-                        specialists = self._extract_specialists(initial_analysis.content)
-                        for specialist in specialists:
-                            specialist_id = str(uuid.uuid4())
-                            success = self._process_specialist(
-                                specialist=specialist,
-                                prompt=prompt,
-                                message_id=specialist_id,
-                                initial_analysis=initial_analysis.content,
-                                timeout=timeout
-                            )
-                            if not success:
-                                return False
-                        
-                        # Generate synthesis if needed
-                        if specialists:
-                            synthesis_id = str(uuid.uuid4())
-                            success = self._generate_synthesis(
-                                prompt=prompt,
-                                message_id=synthesis_id,
-                                specialists=specialists,
-                                timeout=timeout
-                            )
-                            if not success:
-                                return False
-                    
-                    return True
-                    
-                except Exception as e:
-                    retry_count += 1
-                    if retry_count >= self._max_retries:
-                        raise
-                    time.sleep(2 ** retry_count)  # Exponential backoff
+            # Extract and process specialists
+            specialists = self._extract_specialists(initial_analysis)
+            
+            for specialist in specialists:
+                yield {
+                    "type": "status",
+                    "content": f"Consulting {specialist['domain'].title()} specialist..."
+                }
+                
+                specialist_response = yield from self._generate_specialist_response(
+                    specialist=specialist,
+                    prompt=prompt,
+                    initial_analysis=initial_analysis
+                )
+                
+                # Add delay between specialists
+                time.sleep(2)
+            
+            # Generate synthesis
+            if specialists:
+                yield {
+                    "type": "status",
+                    "content": "Synthesizing insights..."
+                }
+                
+                synthesis = yield from self._generate_synthesis_response(
+                    prompt=prompt,
+                    specialists=specialists
+                )
+                
+                yield {
+                    "type": "status",
+                    "content": "Generating follow-up questions..."
+                }
+                
+                suggestions = self._generate_suggestions(synthesis)
+                if suggestions:
+                    yield {
+                        "type": "suggestions",
+                        "content": suggestions
+                    }
+            
+            yield {
+                "type": "status",
+                "content": "Complete!"
+            }
             
         except Exception as e:
-            self.state_manager.update_message(
-                message_id=message_id,
-                content=f"Error: {str(e)}",
-                is_complete=True,
-                message_type="error"
-            )
-            return False
+            yield {
+                "type": "error",
+                "content": str(e)
+            }
     
     def _generate_initial_analysis(self, prompt: str) -> Generator[str, None, None]:
         """Generate initial analysis with streaming."""
@@ -159,39 +125,33 @@ class AgentOrchestrator:
             stream=True
         )
         
+        full_response = ""
         for chunk in response:
             if chunk.text:
-                yield chunk.text
+                full_response += chunk.text
+                yield {
+                    "type": "initial_analysis",
+                    "content": full_response,
+                    "streaming": True
+                }
+        
+        yield {
+            "type": "initial_analysis",
+            "content": full_response,
+            "streaming": False
+        }
+        
+        return full_response
     
     def _extract_specialists(self, analysis: str) -> List[Dict[str, str]]:
         """Extract required specialists from analysis."""
         specialists = []
-        
-        # Extract main topics from the analysis using numbered sections
         sections = re.findall(r'\d+\.\s+([^:]+):', analysis)
         
-        for section in sections[:3]:  # Limit to 3 specialists
-            # Clean up the section name
+        for section in sections[:3]:
             topic = section.strip()
+            domain = self._map_topic_to_domain(topic.lower())
             
-            # Map topics to domains
-            domain = topic.lower()
-            if any(word in domain for word in ['ecosystem', 'environment', 'nature']):
-                domain = 'ecology'
-            elif any(word in domain for word in ['culture', 'society', 'community']):
-                domain = 'sociology'
-            elif any(word in domain for word in ['history', 'heritage', 'past']):
-                domain = 'history'
-            elif any(word in domain for word in ['geography', 'location', 'terrain']):
-                domain = 'geography'
-            elif any(word in domain for word in ['conservation', 'preservation']):
-                domain = 'conservation'
-            elif any(word in domain for word in ['wildlife', 'animals', 'species']):
-                domain = 'biology'
-            else:
-                domain = 'science'
-            
-            # Create specialist entry
             specialist = {
                 'domain': domain,
                 'expertise': topic,
@@ -200,97 +160,29 @@ class AgentOrchestrator:
             }
             specialists.append(specialist)
         
-        return specialists[:3]  # Ensure we don't exceed 3 specialists
+        return specialists[:3]
     
-    def _get_domain_avatar(self, domain: str) -> str:
-        """Get avatar emoji for domain."""
-        avatars = {
-            'history': '📚',
-            'culture': '🎭',
-            'music': '🎵',
-            'food': '🍳',
-            'architecture': '🏛️',
-            'art': '🎨',
-            'literature': '📖',
-            'geography': '🗺️',
-            'economics': '📈',
-            'sociology': '👥',
-            'politics': '⚖️',
-            'science': '🔬',
-            'technology': '💻',
-            'environment': '🌿',
-            'sports': '⚽',
-            'religion': '🕊️',
-            'philosophy': '🤔'
+    def _map_topic_to_domain(self, topic: str) -> str:
+        """Map a topic to a specific domain."""
+        domain_mappings = {
+            ('ecosystem', 'environment', 'nature'): 'ecology',
+            ('culture', 'society', 'community'): 'sociology',
+            ('history', 'heritage', 'past'): 'history',
+            ('geography', 'location', 'terrain'): 'geography',
+            ('conservation', 'preservation'): 'conservation',
+            ('wildlife', 'animals', 'species'): 'biology'
         }
-        return avatars.get(domain.lower(), '🔍')
-    
-    def _process_specialist(self,
-                          specialist: Dict[str, str],
-                          prompt: str,
-                          message_id: str,
-                          initial_analysis: str,
-                          timeout: Optional[float] = None) -> bool:
-        """Process a single specialist with streaming."""
-        try:
-            self.state_manager.update_message(
-                message_id=message_id,
-                content="",
-                is_complete=False,
-                message_type="specialist",
-                domain=specialist.get('domain'),
-                avatar=specialist.get('avatar', '🔍')
-            )
-            
-            chunk_buffer = []
-            
-            # Wait for rate limit
-            if not self._rate_limiter.wait_if_needed(timeout):
-                raise TimeoutError("Rate limit timeout exceeded")
-            
-            # Generate specialist response
-            for chunk in self._generate_specialist_response(
-                specialist=specialist,
-                prompt=prompt,
-                initial_analysis=initial_analysis
-            ):
-                if chunk:
-                    chunk_buffer.append(chunk)
-                    
-                    if len(chunk_buffer) >= self._chunk_buffer_size:
-                        combined_chunk = "".join(chunk_buffer)
-                        self.state_manager.update_message(
-                            message_id=message_id,
-                            content=combined_chunk,
-                            is_complete=False
-                        )
-                        chunk_buffer = []
-                        st.rerun()
-            
-            # Process final buffer
-            if chunk_buffer:
-                final_chunk = "".join(chunk_buffer)
-                self.state_manager.update_message(
-                    message_id=message_id,
-                    content=final_chunk,
-                    is_complete=True
-                )
-            
-            return True
-            
-        except Exception as e:
-            self.state_manager.update_message(
-                message_id=message_id,
-                content=f"Error in {specialist.get('domain', 'specialist')}: {str(e)}",
-                is_complete=True,
-                message_type="error"
-            )
-            return False
+        
+        for keywords, domain in domain_mappings.items():
+            if any(word in topic for word in keywords):
+                return domain
+        
+        return 'science'
     
     def _generate_specialist_response(self,
                                    specialist: Dict[str, str],
                                    prompt: str,
-                                   initial_analysis: str) -> Generator[str, None, None]:
+                                   initial_analysis: str) -> Generator[Dict[str, any], None, None]:
         """Generate specialist response with streaming."""
         model = genai.GenerativeModel(
             'gemini-2.0-flash-exp',
@@ -308,6 +200,7 @@ class AgentOrchestrator:
         {initial_analysis}
         
         Provide a detailed specialist analysis focusing on your domain expertise.
+        Format your response with clear sections and maintain an academic tone.
         """
         
         response = model.generate_content(
@@ -321,72 +214,31 @@ class AgentOrchestrator:
             stream=True
         )
         
+        full_response = ""
         for chunk in response:
             if chunk.text:
-                yield chunk.text
-    
-    def _generate_synthesis(self,
-                          prompt: str,
-                          message_id: str,
-                          specialists: List[Dict[str, str]],
-                          timeout: Optional[float] = None) -> bool:
-        """Generate synthesis with streaming."""
-        try:
-            self.state_manager.update_message(
-                message_id=message_id,
-                content="",
-                is_complete=False,
-                message_type="synthesis",
-                avatar="📊"
-            )
-            
-            chunk_buffer = []
-            
-            # Wait for rate limit
-            if not self._rate_limiter.wait_if_needed(timeout):
-                raise TimeoutError("Rate limit timeout exceeded")
-            
-            # Generate synthesis
-            for chunk in self._generate_synthesis_response(
-                prompt=prompt,
-                specialists=specialists
-            ):
-                if chunk:
-                    chunk_buffer.append(chunk)
-                    
-                    if len(chunk_buffer) >= self._chunk_buffer_size:
-                        combined_chunk = "".join(chunk_buffer)
-                        self.state_manager.update_message(
-                            message_id=message_id,
-                            content=combined_chunk,
-                            is_complete=False
-                        )
-                        chunk_buffer = []
-                        st.rerun()
-            
-            # Process final buffer
-            if chunk_buffer:
-                final_chunk = "".join(chunk_buffer)
-                self.state_manager.update_message(
-                    message_id=message_id,
-                    content=final_chunk,
-                    is_complete=True
-                )
-            
-            return True
-            
-        except Exception as e:
-            self.state_manager.update_message(
-                message_id=message_id,
-                content=f"Error generating synthesis: {str(e)}",
-                is_complete=True,
-                message_type="error"
-            )
-            return False
+                full_response += chunk.text
+                yield {
+                    "type": "specialist",
+                    "content": full_response,
+                    "domain": specialist['domain'],
+                    "avatar": specialist['avatar'],
+                    "streaming": True
+                }
+        
+        yield {
+            "type": "specialist",
+            "content": full_response,
+            "domain": specialist['domain'],
+            "avatar": specialist['avatar'],
+            "streaming": False
+        }
+        
+        return full_response
     
     def _generate_synthesis_response(self,
                                    prompt: str,
-                                   specialists: List[Dict[str, str]]) -> Generator[str, None, None]:
+                                   specialists: List[Dict[str, str]]) -> Generator[Dict[str, any], None, None]:
         """Generate synthesis response with streaming."""
         model = genai.GenerativeModel(
             'gemini-2.0-flash-exp',
@@ -422,6 +274,84 @@ class AgentOrchestrator:
             stream=True
         )
         
+        full_response = ""
         for chunk in response:
             if chunk.text:
-                yield chunk.text 
+                full_response += chunk.text
+                yield {
+                    "type": "synthesis",
+                    "content": full_response,
+                    "streaming": True
+                }
+        
+        yield {
+            "type": "synthesis",
+            "content": full_response,
+            "streaming": False
+        }
+        
+        return full_response
+    
+    def _generate_suggestions(self, content: str) -> List[tuple]:
+        """Generate follow-up suggestions."""
+        try:
+            if not self._rate_limiter.wait_if_needed(timeout=5):
+                return []
+            
+            model = genai.GenerativeModel(
+                'gemini-2.0-flash-exp',
+                generation_config={
+                    'temperature': 0.7,
+                    'top_p': 0.9,
+                    'top_k': 30,
+                    'max_output_tokens': 512
+                }
+            )
+            
+            prompt = f"""Generate 3 follow-up questions based on the key points in this content.
+            Format as:
+            Q1: [question]
+            Q2: [question]
+            Q3: [question]
+            
+            Content: {content[:2000]}
+            """
+            
+            response = model.generate_content(prompt)
+            suggestions = []
+            
+            for line in response.text.split('\n'):
+                line = line.strip()
+                if line.startswith('Q') and ':' in line:
+                    question = line.split(':', 1)[1].strip()
+                    words = question.split()
+                    headline = ' '.join(words[:5]) + '...'
+                    suggestions.append((headline, question))
+            
+            return suggestions[:3]
+            
+        except Exception:
+            return []
+    
+    def _get_domain_avatar(self, domain: str) -> str:
+        """Get avatar emoji for domain."""
+        avatars = {
+            'history': '📚',
+            'culture': '🎭',
+            'music': '🎵',
+            'food': '🍳',
+            'architecture': '🏛️',
+            'art': '🎨',
+            'literature': '📖',
+            'geography': '🗺️',
+            'economics': '📈',
+            'sociology': '👥',
+            'politics': '⚖️',
+            'science': '🔬',
+            'technology': '💻',
+            'environment': '🌿',
+            'sports': '⚽',
+            'religion': '🕊️',
+            'philosophy': '🤔'
+        }
+        return avatars.get(domain.lower(), '🔍') 
