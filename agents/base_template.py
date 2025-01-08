@@ -1,6 +1,54 @@
 """Base template for collaborative agents."""
 from typing import Optional, Generator, List
 import google.generativeai as genai
+import time
+from threading import Lock
+
+class RateLimiter:
+    """Rate limiter for API requests."""
+    _instance = None
+    _lock = Lock()
+    
+    def __init__(self):
+        self.last_request_time = 0
+        self.requests_this_minute = 0
+        self.requests_today = 0
+        self.MIN_REQUEST_INTERVAL = 0.1  # 100ms between requests
+        self.MAX_RPM = 30  # Requests per minute
+        self.MAX_RPD = 1000  # Requests per day
+        
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = cls()
+        return cls._instance
+    
+    def wait_if_needed(self):
+        with self._lock:
+            current_time = time.time()
+            
+            # Enforce minimum interval between requests
+            time_since_last = current_time - self.last_request_time
+            if time_since_last < self.MIN_REQUEST_INTERVAL:
+                time.sleep(self.MIN_REQUEST_INTERVAL - time_since_last)
+            
+            # Reset counters if a minute has passed
+            if time_since_last > 60:
+                self.requests_this_minute = 0
+            
+            # Check rate limits
+            if self.requests_this_minute >= self.MAX_RPM:
+                sleep_time = 60 - (current_time - self.last_request_time)
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+                self.requests_this_minute = 0
+            
+            # Update counters
+            self.requests_this_minute += 1
+            self.requests_today += 1
+            self.last_request_time = time.time()
 
 class AgentConfig:
     """Configuration for agents."""
@@ -20,6 +68,7 @@ class BaseAgent:
         self.role = role
         self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
         self.conversation_history = []
+        self.rate_limiter = RateLimiter.get_instance()
         
         # Base system prompt
         self.system_prompt = """You are a collaborative AI agent working as part of a multi-agent system.
@@ -97,6 +146,9 @@ class BaseAgent:
     def generate_response(self, user_input: list, previous_responses: List[str] = None, stream: bool = True) -> Generator[str, None, None]:
         """Generate a response to the input, considering previous agent responses."""
         try:
+            # Wait for rate limiter
+            self.rate_limiter.wait_if_needed()
+            
             # Prepare complete prompt
             prompt = self.prepare_prompt(user_input, previous_responses)
             

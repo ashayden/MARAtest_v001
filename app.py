@@ -276,20 +276,27 @@ def copy_to_clipboard(text: str):
 
 def generate_suggestions(content: str) -> list:
     """Generate follow-up suggestions based on content."""
-    prompt = f"""
-    Based on the following content, generate exactly 3 follow-up questions that are:
-    1. A deeper dive into the most interesting specific aspect
-    2. An extension into related areas or implications
-    3. An unexpected connection to another field
-    
-    Format each as:
-    HEADLINE: [5-7 word summary]
-    FULL: [Complete question]
-    
-    Content: {content}
-    """
+    # Get rate limiter instance
+    from agents.base_template import RateLimiter
+    rate_limiter = RateLimiter.get_instance()
     
     try:
+        # Wait for rate limiter
+        rate_limiter.wait_if_needed()
+        
+        prompt = f"""
+        Based on the following content, generate exactly 3 follow-up questions that are:
+        1. A deeper dive into the most interesting specific aspect
+        2. An extension into related areas or implications
+        3. An unexpected connection to another field
+        
+        Format each as:
+        HEADLINE: [5-7 word summary]
+        FULL: [Complete question]
+        
+        Content: {content}
+        """
+        
         model = genai.GenerativeModel('gemini-2.0-flash-exp')
         response = model.generate_content(
             prompt,
@@ -316,8 +323,8 @@ def generate_suggestions(content: str) -> list:
         return suggestions[:3]  # Ensure we return exactly 3 suggestions
         
     except Exception as e:
-        st.error(f"Error generating suggestions: {str(e)}")
-        return []
+        st.warning(f"Could not generate follow-up questions due to rate limits. Please wait a moment before trying again.")
+        return []  # Return empty list instead of showing error
 
 def display_three_dot_menu(message: str):
     """Display three-dot menu with options."""
