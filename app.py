@@ -478,16 +478,7 @@ def get_orchestrator():
     """Get or create the agent orchestrator."""
     if 'orchestrator' not in st.session_state:
         from agents.orchestrator import AgentOrchestrator
-        from agents.base_template import AgentConfig
-        
-        config = AgentConfig(
-            temperature=st.session_state.temperature,
-            top_p=st.session_state.top_p,
-            top_k=st.session_state.top_k,
-            max_output_tokens=st.session_state.max_output_tokens
-        )
-        
-        st.session_state.orchestrator = AgentOrchestrator(config)
+        st.session_state.orchestrator = AgentOrchestrator()
     
     return st.session_state.orchestrator
 
