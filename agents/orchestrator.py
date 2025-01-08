@@ -17,6 +17,12 @@ class AgentOrchestrator:
         self._max_retries = 3
         self.state_manager = StateManager()
         
+        # Initialize agents dictionary
+        self.agents = {
+            'initializer': genai.GenerativeModel('gemini-2.0-flash-exp'),
+            'reasoner': genai.GenerativeModel('gemini-2.0-flash-exp')
+        }
+        
         # Initialize model configurations
         self._initializer_config = {
             'temperature': 0.5,
