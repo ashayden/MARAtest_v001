@@ -312,50 +312,52 @@ def generate_suggestions(content: str) -> list:
     rate_limiter = RateLimiter.get_instance()
     
     try:
-        # Wait for rate limiter
-        rate_limiter.wait_if_needed()
+        # Wait for rate limiter with a shorter timeout
+        rate_limiter.wait_if_needed(timeout=5)  # 5 second timeout
         
+        # Create a more focused prompt to reduce token usage
         prompt = f"""
-        Based on the following content, generate exactly 3 follow-up questions that are:
-        1. A deeper dive into the most interesting specific aspect
-        2. An extension into related areas or implications
-        3. An unexpected connection to another field
+        Generate 3 follow-up questions based on the key points in this content.
+        Format as:
+        Q1: [question]
+        Q2: [question]
+        Q3: [question]
         
-        Format each as:
-        HEADLINE: [5-7 word summary]
-        FULL: [Complete question]
-        
-        Content: {content}
+        Content: {content[:2000]}  # Limit content length to reduce tokens
         """
         
         model = genai.GenerativeModel('gemini-2.0-flash-exp')
         response = model.generate_content(
             prompt,
             generation_config={
-                'temperature': 0.9,
-                'top_p': 0.95,
-                'top_k': 40,
-                'max_output_tokens': 1024,
+                'temperature': 0.7,  # Reduced from 0.9
+                'top_p': 0.9,       # Reduced from 0.95
+                'top_k': 30,        # Reduced from 40
+                'max_output_tokens': 512,  # Reduced from 1024
             }
         )
         
         suggestions = []
-        current_headline = None
+        current_question = None
         
+        # Simpler parsing logic
         for line in response.text.split('\n'):
             line = line.strip()
-            if line.startswith('HEADLINE:'):
-                current_headline = line.replace('HEADLINE:', '').strip()
-            elif line.startswith('FULL:') and current_headline:
-                full_question = line.replace('FULL:', '').strip()
-                suggestions.append((current_headline, full_question))
-                current_headline = None
+            if line.startswith('Q') and ':' in line:
+                question = line.split(':', 1)[1].strip()
+                # Use first few words as headline
+                words = question.split()
+                headline = ' '.join(words[:5]) + '...'
+                suggestions.append((headline, question))
         
-        return suggestions[:3]  # Ensure we return exactly 3 suggestions
+        return suggestions[:3]
         
     except Exception as e:
-        st.warning(f"Could not generate follow-up questions due to rate limits. Please wait a moment before trying again.")
-        return []  # Return empty list instead of showing error
+        if "RATE_LIMIT_EXCEEDED" in str(e):
+            st.info("Skipping follow-up questions due to rate limits.")
+        else:
+            st.warning(f"Could not generate follow-up questions: {str(e)}")
+        return []
 
 def display_three_dot_menu(message: str):
     """Display three-dot menu with options."""
