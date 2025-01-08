@@ -110,7 +110,17 @@ class AgentOrchestrator:
         )
         
         prompt_template = """Analyze the following topic and provide a structured analysis with exactly 3 main sections.
-        Each section should focus on a key aspect that requires deeper investigation.
+        Your role is to:
+        1. Identify key aspects that require deep domain expertise
+        2. Break down complex topics into clear, focused areas
+        3. Highlight interconnections between different aspects
+        4. Set the foundation for specialist analysis
+        
+        Each section should:
+        - Focus on a distinct aspect requiring specialist expertise
+        - Provide enough context for domain specialists
+        - Identify specific areas needing deeper investigation
+        - Consider interdisciplinary implications
         
         Follow these strict markdown formatting rules:
         1. Start with a creative title using a single '#' header
@@ -208,7 +218,21 @@ class AgentOrchestrator:
             generation_config=self._specialist_config
         )
         
-        prompt_template = """Based on your expertise in {expertise}, provide a focused analysis of the following topic.
+        prompt_template = """As a domain expert in {expertise}, provide a focused analysis of the following topic.
+        
+        Your role is to:
+        1. Apply deep domain knowledge to the assigned aspect
+        2. Provide detailed, evidence-based insights
+        3. Identify patterns and implications within your domain
+        4. Connect your analysis to broader context
+        5. Highlight critical factors other specialists should consider
+        
+        Analysis requirements:
+        - Maintain academic rigor and depth
+        - Support claims with clear reasoning
+        - Consider historical context and future implications
+        - Address potential challenges and opportunities
+        - Identify areas needing further investigation
         
         Follow these strict markdown formatting rules:
         1. Start with a creative title using a single '#' header
@@ -286,8 +310,23 @@ class AgentOrchestrator:
             for s in specialists
         )
         
-        prompt_template = """Create a comprehensive synthesis for the following topic:
-        {prompt}
+        prompt_template = """Create a comprehensive synthesis integrating insights from multiple domain experts.
+        
+        Your role is to:
+        1. Identify key patterns and themes across specialist analyses
+        2. Highlight important interconnections between domains
+        3. Draw meaningful conclusions from combined insights
+        4. Present a cohesive narrative that bridges perspectives
+        5. Identify broader implications and future directions
+        
+        Synthesis requirements:
+        - Maintain balanced representation of all perspectives
+        - Identify points of convergence and divergence
+        - Draw evidence-based conclusions
+        - Address complexity and nuance
+        - Suggest practical applications and next steps
+        
+        Topic: {prompt}
         
         Drawing from these areas of expertise:
         {specialist_info}
