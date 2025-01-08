@@ -494,50 +494,55 @@ def model_settings_sidebar():
         # How it Works section
         with st.expander("ℹ️ How it Works", expanded=False):
             st.markdown("""
-            This AI Assistant is unique in its ability to dynamically create specialist agents based on your query's topic. Unlike traditional chatbots that use a one-size-fits-all approach, this system:
-
-            - Creates domain experts in real-time based on your specific topic
-            - Combines insights from multiple specialists for comprehensive answers
-            - Allows fine-tuning of specialist behavior through model controls
+            This AI Assistant uses the Gemini 2.0 Flash Experimental model to provide comprehensive analysis through a coordinated multi-agent system.
             
-            ---
+            ### System Configuration
+            - **Model**: Gemini 2.0 Flash Experimental
+            - **Rate Limits**: 3 requests per minute (free tier)
+            - **Request Interval**: 1.5 seconds minimum between requests
             
             ### Multi-Agent Response Architecture
             
-            #### Core Components
-            1. **Initializer Agent** (Fixed Settings)
-               - Analyzes input to identify required expertise
-               - Determines which specialists to consult
-               - Provides initial context framework
+            #### 1. Initial Analysis Agent (Fixed Settings)
+            - Temperature: 0.5 (balanced)
+            - Purpose: Analyzes input and identifies required expertise
+            - Determines which specialists to consult
+            - Provides initial context framework
             
-            2. **Domain Specialists** (Adjustable Settings)
-               - Created dynamically based on input
-               - Expertise determined in real-time
-               - Controlled by sidebar model settings
-               - Provide domain-specific insights
+            #### 2. Domain Specialists (Adjustable Settings)
+            - Created dynamically based on input topic
+            - Expertise determined in real-time
+            - Controlled by sidebar model settings
+            - Each specialist provides domain-specific insights
             
-            3. **Synthesis Agent** (Fixed Settings)
-               - Integrates all specialist responses
-               - Creates cohesive final report
-               - Maintains consistent structure
+            #### 3. Synthesis Agent (Fixed Settings)
+            - Temperature: 0.3 (focused)
+            - Integrates all specialist responses
+            - Creates cohesive final report
+            - Maintains consistent academic structure
             
-            #### Workflow
-            1. User submits query/content
-            2. Initializer analyzes and identifies needed expertise
-            3. Relevant specialists are created/activated
-            4. Each specialist provides domain insights
-            5. Synthesis agent creates final structured report
+            ### Rate Limit Management
+            - Maximum 3 requests per minute
+            - 1.5 second pause between requests
+            - Manual retry required if limits exceeded
+            - Clear error messages when limits are reached
             
-            #### Dynamic Specialist Control
-            - **Creativity Level**: Influences specialist response creativity
-            - **Response Diversity**: Controls response variation
-            - **Choice Range**: Affects word selection breadth
+            ### Features
+            - Real-time streaming responses
+            - Dynamic specialist creation
+            - Persistent chat history
+            - Downloadable reports
+            - Copy functionality
+            - Follow-up suggestions
+            
+            ### Model Settings (Sidebar)
+            Adjust these settings to control specialist behavior:
+            - **Creativity Level**: Controls response variety
+            - **Response Diversity**: Affects token selection
+            - **Choice Range**: Influences word selection
             - **Maximum Length**: Sets response length limit
             
-            #### Features
-            - Real-time streaming responses
-            - Collapsible specialist insights
-            - Persistent chat history
+            Note: Initial Analysis and Synthesis agents use fixed settings for consistency.
             """)
 
 def get_orchestrator():
