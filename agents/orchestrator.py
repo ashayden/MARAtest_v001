@@ -304,3 +304,248 @@ class AgentOrchestrator:
         except Exception as e:
             st.error(f"Error generating suggestions: {str(e)}")
             return [] 
+
+    def _generate_initial_analysis(self, prompt: str) -> Generator[Dict[str, Any], None, None]:
+        """Generate initial analysis with streaming."""
+        try:
+            prompt_template = """Analyze the following topic and provide a structured analysis with exactly 3 main sections.
+            Your role is to:
+            1. Identify key aspects that require deep domain expertise
+            2. Break down complex topics into clear, focused areas
+            3. Highlight interconnections between different aspects
+            4. Set the foundation for specialist analysis
+            
+            Each section should:
+            - Focus on a distinct aspect requiring specialist expertise
+            - Provide enough context for domain specialists
+            - Identify specific areas needing deeper investigation
+            - Consider interdisciplinary implications
+            
+            Follow these strict markdown formatting rules:
+            1. Start with a creative title using a single '#' header
+            2. Use '###' for main section headers
+            3. Use '####' for subsection headers
+            4. Use '**' for bold text (not __ or ***)
+            5. Use '*' for italic text (not _)
+            6. Use '- ' for bullet points
+            7. Use '1. ' style for numbered lists
+            8. Add blank lines before and after headers
+            9. Use consistent spacing (single blank line between paragraphs)
+            10. Do not use horizontal rules or other decorative elements
+            
+            Format your response as:
+            # [Creative Topic-Specific Title]
+            
+            ### 1. [First Key Aspect]
+            [Detailed analysis with proper markdown formatting]
+            
+            ### 2. [Second Key Aspect]
+            [Detailed analysis with proper markdown formatting]
+            
+            ### 3. [Third Key Aspect]
+            [Detailed analysis with proper markdown formatting]
+            
+            Topic: {prompt}
+            """
+            
+            full_response = ""
+            for chunk in self._generate_model_response(
+                prompt=prompt_template.format(prompt=prompt),
+                config=self._initializer_config
+            ):
+                full_response += chunk
+                yield {
+                    "type": "initial_analysis",
+                    "content": full_response,
+                    "streaming": True
+                }
+            
+            yield {
+                "type": "initial_analysis",
+                "content": full_response,
+                "streaming": False
+            }
+            
+        except Exception as e:
+            error_msg = f"Error in initial analysis: {str(e)}"
+            st.error(error_msg)
+            yield {
+                "type": "error",
+                "content": error_msg
+            }
+
+    def _generate_specialist_response(
+        self,
+        specialist: Dict[str, str],
+        prompt: str,
+        initial_analysis: str
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Generate specialist response with streaming."""
+        try:
+            prompt_template = """As a domain expert in {expertise}, provide a focused analysis of the following topic.
+            
+            Your role is to:
+            1. Apply deep domain knowledge to the assigned aspect
+            2. Provide detailed, evidence-based insights
+            3. Identify patterns and implications within your domain
+            4. Connect your analysis to broader context
+            5. Highlight critical factors other specialists should consider
+            
+            Analysis requirements:
+            - Maintain academic rigor and depth
+            - Support claims with clear reasoning
+            - Consider historical context and future implications
+            - Address potential challenges and opportunities
+            - Identify areas needing further investigation
+            
+            Follow these strict markdown formatting rules:
+            1. Start with a creative title using a single '#' header
+            2. Use '###' for main section headers
+            3. Use '####' for subsection headers
+            4. Use '**' for bold text (not __ or ***)
+            5. Use '*' for italic text (not _)
+            6. Use '- ' for bullet points
+            7. Use '1. ' style for numbered lists
+            8. Add blank lines before and after headers
+            9. Use consistent spacing (single blank line between paragraphs)
+            10. Do not use horizontal rules or other decorative elements
+            
+            Format your response as:
+            # [Creative Topic-Specific Title]
+            
+            ### [First Main Section]
+            [Analysis with proper markdown formatting]
+            
+            ### [Second Main Section]
+            [Analysis with proper markdown formatting]
+            
+            Topic to analyze: {prompt}
+            
+            Consider this context:
+            {initial_analysis}
+            
+            Focus your analysis on: {focus}
+            """
+            
+            full_response = ""
+            for chunk in self._generate_model_response(
+                prompt=prompt_template.format(
+                    expertise=specialist['expertise'],
+                    prompt=prompt,
+                    initial_analysis=initial_analysis,
+                    focus=specialist['focus']
+                ),
+                config=self._specialist_config
+            ):
+                full_response += chunk
+                yield {
+                    "type": "specialist",
+                    "content": full_response,
+                    "domain": specialist['domain'],
+                    "avatar": specialist['avatar'],
+                    "streaming": True
+                }
+            
+            yield {
+                "type": "specialist",
+                "content": full_response,
+                "domain": specialist['domain'],
+                "avatar": specialist['avatar'],
+                "streaming": False
+            }
+            
+        except Exception as e:
+            error_msg = f"Error in specialist response: {str(e)}"
+            st.error(error_msg)
+            yield {
+                "type": "error",
+                "content": error_msg
+            }
+
+    def _generate_synthesis_response(
+        self,
+        prompt: str,
+        specialists: List[Dict[str, str]]
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Generate synthesis response with streaming."""
+        try:
+            # Format specialist insights for context
+            specialist_info = "\n\n".join(
+                f"### {s['domain'].title()} Insights:\n{s['content']}"
+                for s in specialists
+            )
+            
+            prompt_template = """Create a comprehensive synthesis integrating insights from multiple domain experts.
+            
+            Your role is to:
+            1. Identify key patterns and themes across specialist analyses
+            2. Highlight important interconnections between domains
+            3. Draw meaningful conclusions from combined insights
+            4. Present a cohesive narrative that bridges perspectives
+            5. Identify broader implications and future directions
+            
+            Synthesis requirements:
+            - Maintain balanced representation of all perspectives
+            - Identify points of convergence and divergence
+            - Draw evidence-based conclusions
+            - Address complexity and nuance
+            - Suggest practical applications and next steps
+            
+            Follow these strict markdown formatting rules:
+            1. Start with a creative title using a single '#' header
+            2. Use '###' for main section headers
+            3. Use '####' for subsection headers
+            4. Use '**' for bold text (not __ or ***)
+            5. Use '*' for italic text (not _)
+            6. Use '- ' for bullet points
+            7. Use '1. ' style for numbered lists
+            8. Add blank lines before and after headers
+            9. Use consistent spacing (single blank line between paragraphs)
+            10. Do not use horizontal rules or other decorative elements
+            
+            Format your response as:
+            # [Creative Topic-Specific Title]
+            
+            ### Key Insights
+            [Integrated analysis with proper markdown formatting]
+            
+            ### Synthesis of Perspectives
+            [Combined insights with proper markdown formatting]
+            
+            ### Conclusions and Implications
+            [Final analysis with proper markdown formatting]
+            
+            Topic: {prompt}
+            
+            Specialist Insights:
+            {specialist_info}
+            """
+            
+            full_response = ""
+            for chunk in self._generate_model_response(
+                prompt=prompt_template.format(
+                    prompt=prompt,
+                    specialist_info=specialist_info
+                ),
+                config=self._synthesis_config
+            ):
+                full_response += chunk
+                yield {
+                    "type": "synthesis",
+                    "content": full_response,
+                    "streaming": True
+                }
+            
+            yield {
+                "type": "synthesis",
+                "content": full_response,
+                "streaming": False
+            }
+            
+        except Exception as e:
+            error_msg = f"Error in synthesis: {str(e)}"
+            st.error(error_msg)
+            yield {
+                "type": "error",
+                "content": error_msg
+            } 
