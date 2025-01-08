@@ -545,9 +545,10 @@ def display_message(message: dict, container=None):
                 title = title_map.get(message_type, "Assistant")
             
             # Display title only once at start of streaming
-            if not is_streaming or not content:
+            if not is_streaming or not hasattr(msg_container, '_title_shown'):
                 st.markdown(f"### {title}")
                 st.markdown("---")
+                setattr(msg_container, '_title_shown', True)
                 
                 # Add AI content warning for synthesis
                 if message_type == "synthesis":
@@ -556,8 +557,10 @@ def display_message(message: dict, container=None):
             # Display content (streaming or complete)
             if content:
                 content = re.sub(r'\*{1,2}([^\*]+)\*{1,2}', r'\1', content)
-                content_placeholder = st.empty()
-                content_placeholder.markdown(content)
+                # Use a placeholder for content to avoid flickering
+                if not hasattr(msg_container, '_content_placeholder'):
+                    setattr(msg_container, '_content_placeholder', st.empty())
+                msg_container._content_placeholder.markdown(content)
             
             # Only show actions when streaming is complete
             if not is_streaming:

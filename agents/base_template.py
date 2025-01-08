@@ -237,17 +237,17 @@ class BaseAgent:
             )
             
             if stream:
-                full_response = ""
+                accumulated_response = ""
                 for chunk in response:
                     if chunk.text:
-                        full_response += chunk.text
-                        yield chunk.text
+                        accumulated_response += chunk.text
+                        yield chunk.text  # Stream each chunk immediately
                 
                 # Add to history with role context
                 self.add_to_history({
                     'role': 'assistant',
                     'agent': self.role,
-                    'content': full_response
+                    'content': accumulated_response
                 })
             else:
                 # Add to history with role context
@@ -281,10 +281,25 @@ class BaseAgent:
                     )
                     
                     if stream:
+                        accumulated_response = ""
                         for chunk in response:
                             if chunk.text:
-                                yield chunk.text
+                                accumulated_response += chunk.text
+                                yield chunk.text  # Stream each chunk immediately
+                        
+                        # Add to history with role context
+                        self.add_to_history({
+                            'role': 'assistant',
+                            'agent': self.role,
+                            'content': accumulated_response
+                        })
                     else:
+                        # Add to history with role context
+                        self.add_to_history({
+                            'role': 'assistant',
+                            'agent': self.role,
+                            'content': response.text
+                        })
                         yield response.text
                         
                 except Exception:
