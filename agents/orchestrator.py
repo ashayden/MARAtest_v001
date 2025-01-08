@@ -1,6 +1,7 @@
 """Orchestrator for managing collaborative agent interactions."""
 from typing import List, Dict, Generator
 from .base_template import BaseAgent, AgentConfig
+import re
 
 class AgentOrchestrator:
     """Manages collaboration between specialized agents."""
@@ -38,24 +39,20 @@ class AgentOrchestrator:
         self.agents['initializer'].system_prompt = """You are the initial analysis agent.
         Your role is to:
         1. Analyze user input to identify key topics and required expertise
-        2. Determine which specialized agents should be consulted
+        2. Determine which specialized agents should be consulted (maximum 3 specialists)
         3. Structure the initial response framework
-        4. For each identified domain:
-           - Specify the exact domain name
-           - Define the required expertise and focus areas
-           - Outline specific aspects to analyze
+        4. For each identified domain (up to 3):
+           DOMAIN: [domain name in lowercase]
+           EXPERTISE: [specific areas of expertise needed]
+           FOCUS: [key aspects to analyze]
         5. Maintain coherence across agent contributions
         
         Format your analysis with clear sections:
         1. Overview of the topic
-        2. Key Topics and Required Expertise:
-           For each domain list:
-           DOMAIN: [domain_name]
-           EXPERTISE: [specific areas of expertise needed]
-           FOCUS: [key aspects to analyze]
+        2. Key Topics and Required Expertise (list exactly what is needed for each specialist)
         3. Analysis Framework
         
-        Keep your analysis technical and focused on identifying the required expertise.
+        Keep your analysis technical and focused.
         Do not include any first-person pronouns or references to being an AI.
         """
         
@@ -130,58 +127,27 @@ Avoid:
         specialist.system_prompt = specialist_prompt
         return specialist
     
-    def identify_required_specialists(self, input_text: str) -> List[Dict[str, str]]:
-        """Analyze input to determine required specialist expertise."""
-        try:
-            # Ensure input_text is a string
-            if isinstance(input_text, dict) and 'text' in input_text:
-                input_text = input_text['text']
-            elif isinstance(input_text, list) and input_text and isinstance(input_text[0], dict) and 'text' in input_text[0]:
-                input_text = input_text[0]['text']
+    def extract_specialists_from_analysis(self, analysis: str) -> List[Dict[str, str]]:
+        """Extract specialist definitions directly from the initial analysis."""
+        specialists = []
+        
+        # Find all domain definitions in the analysis
+        pattern = r"DOMAIN:\s*([^\n]+).*?EXPERTISE:\s*([^\n]+).*?FOCUS:\s*([^\n]+)"
+        matches = re.finditer(pattern, analysis, re.DOTALL)
+        
+        for match in matches:
+            domain = match.group(1).strip().lower()
+            expertise = match.group(2).strip()
+            focus = match.group(3).strip()
             
-            prompt = f"""Analyze the following input and identify the required specialist expertise.
-            For each required domain, specify:
-            DOMAIN: [domain name in lowercase]
-            EXPERTISE: [specific areas of expertise needed]
-            FOCUS: [key aspects to analyze]
-            
-            Separate each specialist with '---'
-            
-            Input: {input_text}
-            
-            Required specialists:"""
-            
-            response = self.agents['initializer'].model.generate_content(prompt)
-            if not response.text:
-                return []
-            
-            # Parse specialist definitions
-            specialists = []
-            for specialist_def in response.text.split('---'):
-                if not specialist_def.strip():
-                    continue
-                    
-                specialist = {}
-                for line in specialist_def.strip().split('\n'):
-                    if ':' in line:
-                        key, value = line.split(':', 1)
-                        key = key.strip().lower()
-                        value = value.strip()
-                        if key == 'domain':
-                            specialist['domain'] = value.lower()
-                        elif key == 'expertise':
-                            specialist['expertise'] = value
-                        elif key == 'focus':
-                            specialist['focus'] = value
-                
-                if 'domain' in specialist and 'expertise' in specialist and 'focus' in specialist:
-                    specialists.append(specialist)
-            
-            return specialists if specialists else [{'domain': 'general', 'expertise': 'general analysis', 'focus': 'overall topic analysis'}]
-            
-        except Exception as e:
-            print(f"Error identifying specialists: {str(e)}")
-            return [{'domain': 'general', 'expertise': 'general analysis', 'focus': 'overall topic analysis'}]
+            if domain and expertise and focus:
+                specialists.append({
+                    'domain': domain,
+                    'expertise': expertise,
+                    'focus': focus
+                })
+        
+        return specialists[:3]  # Limit to 3 specialists maximum
     
     def process_input(self, user_input: list, stream: bool = True) -> Generator[str, None, None]:
         """Process input through the collaborative agent system."""
@@ -202,11 +168,6 @@ Avoid:
                     normalized_input = [{'text': str(user_input[0])}]
             else:
                 normalized_input = [{'text': str(user_input)}]
-
-            # Extract text for specialist identification
-            input_text = ''
-            if normalized_input and isinstance(normalized_input[0], dict) and 'text' in normalized_input[0]:
-                input_text = normalized_input[0]['text']
             
             try:
                 # Start initial analysis
@@ -216,6 +177,10 @@ Avoid:
                     initial_response += chunk
                     if stream:
                         yield chunk
+                
+                # Extract specialists directly from initial analysis
+                specialists = self.extract_specialists_from_analysis(initial_response)
+                
             except Exception as e:
                 if "RATE_LIMIT_EXCEEDED" in str(e):
                     yield "Rate limit exceeded. Please wait a moment before trying again."
@@ -224,21 +189,10 @@ Avoid:
                     yield f"Error in initial analysis: {str(e)}"
                     return
             
-            try:
-                # Identify needed specialists
-                specialists = self.identify_required_specialists(input_text)
-            except Exception as e:
-                if "RATE_LIMIT_EXCEEDED" in str(e):
-                    yield "Rate limit exceeded during specialist identification. Please wait a moment before trying again."
-                    return
-                else:
-                    yield f"Error identifying specialists: {str(e)}"
-                    return
-            
-            # Initialize specialist responses as dictionary
+            # Initialize specialist responses
             specialist_responses = {'initial_analysis': initial_response}
-            previous_responses = [initial_response]  # Start with initial analysis
             
+            # Process specialists in sequence
             for specialist in specialists:
                 domain = specialist['domain']
                 try:
@@ -252,22 +206,18 @@ Avoid:
                     # Mark start of specialist response
                     yield f"\n### SPECIALIST: {domain}\n"
                     
-                    # Prepare previous responses for this specialist
-                    current_previous_responses = previous_responses.copy()
-                    
                     specialist_response = ""
                     for chunk in self.agents[domain].generate_response(
                         normalized_input,
-                        previous_responses=current_previous_responses,
+                        previous_responses=[initial_response],  # Only pass initial analysis
                         stream=True
                     ):
                         specialist_response += chunk
                         if stream:
                             yield chunk
                     
-                    # Store in dictionary and add to previous responses
+                    # Store specialist response
                     specialist_responses[domain] = specialist_response
-                    previous_responses.append(specialist_response)
                 
                 except Exception as e:
                     if "RATE_LIMIT_EXCEEDED" in str(e):
@@ -278,12 +228,17 @@ Avoid:
                         continue
             
             try:
-                # Start final synthesis
+                # Start final synthesis with all responses
                 yield "\n### FINAL_SYNTHESIS:\n"
                 synthesis_response = ""
+                
+                # Prepare all responses for synthesis
+                all_responses = [initial_response]
+                all_responses.extend(specialist_responses[domain] for domain in specialist_responses if domain != 'initial_analysis')
+                
                 for chunk in self.agents['reasoner'].generate_response(
                     normalized_input,
-                    previous_responses=previous_responses,
+                    previous_responses=all_responses,
                     stream=True
                 ):
                     synthesis_response += chunk
