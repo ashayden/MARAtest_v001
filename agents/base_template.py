@@ -12,8 +12,8 @@ class RateLimiter:
     def __init__(self):
         self.last_request_time = 0
         self.requests_this_minute = 0
-        self.MIN_REQUEST_INTERVAL = 2.0  # 2 seconds between requests
-        self.MAX_RPM = 2    # Maximum 2 requests per minute
+        self.MIN_REQUEST_INTERVAL = 1.5  # 1.5 seconds between requests (to ensure we don't exceed 3 RPM)
+        self.MAX_RPM = 3    # Free tier limit of 3 requests per minute
         
     @classmethod
     def get_instance(cls):
