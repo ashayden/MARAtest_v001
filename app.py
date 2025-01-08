@@ -844,7 +844,8 @@ def display_message(message: dict):
         if message_type == "initial_analysis":
             agent_name = "Initial Analysis"
         elif message_type == "specialist":
-            domain = message.get("domain", "").title()
+            # Convert domain name to title case and replace underscores with spaces
+            domain = message.get("domain", "").replace("_", " ").title()
             agent_name = f"{domain} Specialist"
         elif message_type == "synthesis":
             agent_name = "Final Synthesis"
@@ -857,8 +858,8 @@ def display_message(message: dict):
             for emoji in ['🎯', '📚', '🎭', '🎵', '🍳', '🏛️', '🎨', '📖', '🗺️', '📈', '👥', '⚖️', '🔬', '💻', '🌿', '⚽', '🕊️', '🤔', '📊', '💡', '🔍', '🤖']:
                 agent_name = agent_name.replace(emoji, '').strip()
             
-            # Display title with single emoji at start
-            st.markdown(f"{avatar} **{agent_name}**")
+            # Display clean title without emoji in the title text
+            st.markdown(f"**{agent_name}**")
             st.markdown("---")
             st.markdown(content)
 
