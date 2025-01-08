@@ -508,6 +508,44 @@ def get_domain_avatar(domain: str) -> str:
     }
     return domain_avatars.get(domain.lower(), '🔍')
 
+def standardize_markdown(content: str) -> str:
+    """Standardize markdown formatting across all responses."""
+    if not content:
+        return content
+        
+    # Remove any existing titles/headers at start and end
+    content = re.sub(r'^#+ .*$', '', content, flags=re.MULTILINE)
+    content = re.sub(r'\*\*.*?\*\*\s*$', '', content, flags=re.MULTILINE)
+    
+    # Clean up AI/specialist references
+    content = re.sub(r'(?i)(AI|artificial intelligence|specialist|expert).*?analysis', '', content)
+    
+    # Standardize section headers (convert numbered sections to proper headers)
+    content = re.sub(r'^(\d+\.) (.+?):', r'### \1 \2', content, flags=re.MULTILINE)
+    content = re.sub(r'^(\d+\.)(\d+\.) (.+?):', r'#### \1\2 \3', content, flags=re.MULTILINE)
+    
+    # Standardize emphasis
+    content = re.sub(r'\*\*\*(.+?)\*\*\*', r'**\1**', content)  # Convert *** to **
+    content = re.sub(r'_{3}(.+?)_{3}', r'**\1**', content)      # Convert ___ to **
+    content = re.sub(r'_{2}(.+?)_{2}', r'*\1*', content)        # Convert __ to *
+    
+    # Standardize lists
+    content = re.sub(r'^\s*[-\*]\s+', '- ', content, flags=re.MULTILINE)  # Standardize bullet points
+    content = re.sub(r'^\s*(\d+)\)\s+', r'\1. ', content, flags=re.MULTILINE)  # Convert 1) to 1.
+    
+    # Fix spacing
+    content = re.sub(r'\n{3,}', '\n\n', content)  # Remove extra blank lines
+    content = re.sub(r'[ \t]+$', '', content, flags=re.MULTILINE)  # Remove trailing spaces
+    
+    # Ensure proper spacing around headers
+    content = re.sub(r'(#{1,6} .+?)\n([^#\n])', r'\1\n\n\2', content, flags=re.MULTILINE)
+    
+    # Clean up any remaining inconsistencies
+    content = re.sub(r'\s+$', '', content)  # Remove trailing whitespace
+    content = content.strip()  # Remove leading/trailing empty lines
+    
+    return content
+
 def display_message(message: dict, container=None):
     """Display a chat message with clean formatting and streaming support."""
     role = message.get('role', 'user')
@@ -546,16 +584,9 @@ def display_message(message: dict, container=None):
             
             # Clean and format content
             if content:
-                # Remove any existing titles/headers
-                content = re.sub(r'^#+ .*$', '', content, flags=re.MULTILINE)
-                # Remove AI/specialist references
-                content = re.sub(r'(?i)(AI|artificial intelligence|specialist|expert).*?analysis', '', content)
-                content = re.sub(r'\*{1,2}([^\*]+)\*{1,2}', r'\1', content)
-                
-                # Format sections consistently
-                content = re.sub(r'^(\d+\.)', r'### \1', content, flags=re.MULTILINE)
-                
-                st.session_state[content_key].markdown(content)
+                # Apply standardized markdown formatting
+                formatted_content = standardize_markdown(content)
+                st.session_state[content_key].markdown(formatted_content)
             
             # Show actions when streaming is complete
             if not is_streaming:
@@ -563,7 +594,7 @@ def display_message(message: dict, container=None):
                     col1, col2 = container.columns([1, 4])
                     with col1:
                         if st.button("📋 Copy", key=f"copy_{message_type}_{hash(content)}_{int(time.time())}"):
-                            copy_to_clipboard(content)
+                            copy_to_clipboard(formatted_content)
                     with col2:
                         report_content = generate_full_report()
                         st.download_button(
@@ -580,7 +611,7 @@ def display_message(message: dict, container=None):
                             st.rerun()
                 elif message_type != "suggestions":
                     if st.button("📋 Copy", key=f"copy_{message_type}_{hash(content)}_{int(time.time())}"):
-                            copy_to_clipboard(content)
+                            copy_to_clipboard(formatted_content)
     
     return container
 

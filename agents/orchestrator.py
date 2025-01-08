@@ -112,12 +112,29 @@ class AgentOrchestrator:
         prompt_template = """Analyze the following topic and provide a structured analysis with exactly 3 main sections.
         Each section should focus on a key aspect that requires deeper investigation.
         
-        Format your response with a creative title followed by numbered sections:
-        [Creative Topic-Specific Title]
+        Follow these strict markdown formatting rules:
+        1. Start with a creative title using a single '#' header
+        2. Use '###' for main section headers
+        3. Use '####' for subsection headers
+        4. Use '**' for bold text (not __ or ***)
+        5. Use '*' for italic text (not _)
+        6. Use '- ' for bullet points
+        7. Use '1. ' style for numbered lists
+        8. Add blank lines before and after headers
+        9. Use consistent spacing (single blank line between paragraphs)
+        10. Do not use horizontal rules or other decorative elements
         
-        1. [First Key Aspect]: [detailed analysis]
-        2. [Second Key Aspect]: [detailed analysis]
-        3. [Third Key Aspect]: [detailed analysis]
+        Format your response as:
+        # [Creative Topic-Specific Title]
+        
+        ### 1. [First Key Aspect]
+        [Detailed analysis with proper markdown formatting]
+        
+        ### 2. [Second Key Aspect]
+        [Detailed analysis with proper markdown formatting]
+        
+        ### 3. [Third Key Aspect]
+        [Detailed analysis with proper markdown formatting]
         
         Topic: {prompt}
         """
@@ -193,11 +210,26 @@ class AgentOrchestrator:
         
         prompt_template = """Based on your expertise in {expertise}, provide a focused analysis of the following topic.
         
-        Format your response with a creative title that captures the essence of your analysis, followed by clear sections.
-        Begin with:
-        [Creative Topic-Specific Title]
+        Follow these strict markdown formatting rules:
+        1. Start with a creative title using a single '#' header
+        2. Use '###' for main section headers
+        3. Use '####' for subsection headers
+        4. Use '**' for bold text (not __ or ***)
+        5. Use '*' for italic text (not _)
+        6. Use '- ' for bullet points
+        7. Use '1. ' style for numbered lists
+        8. Add blank lines before and after headers
+        9. Use consistent spacing (single blank line between paragraphs)
+        10. Do not use horizontal rules or other decorative elements
         
-        Then organize your insights into 2-3 clear sections, each with a descriptive subheading.
+        Format your response as:
+        # [Creative Topic-Specific Title]
+        
+        ### [First Main Section]
+        [Analysis with proper markdown formatting]
+        
+        ### [Second Main Section]
+        [Analysis with proper markdown formatting]
         
         Topic to analyze: {prompt}
         
@@ -260,13 +292,29 @@ class AgentOrchestrator:
         Drawing from these areas of expertise:
         {specialist_info}
         
-        Format your response with:
-        1. A creative, topic-specific title
-        2. Clear section headings
-        3. Integrated perspectives from each area
-        4. Key conclusions
+        Follow these strict markdown formatting rules:
+        1. Start with a creative title using a single '#' header
+        2. Use '###' for main section headers
+        3. Use '####' for subsection headers
+        4. Use '**' for bold text (not __ or ***)
+        5. Use '*' for italic text (not _)
+        6. Use '- ' for bullet points
+        7. Use '1. ' style for numbered lists
+        8. Add blank lines before and after headers
+        9. Use consistent spacing (single blank line between paragraphs)
+        10. Do not use horizontal rules or other decorative elements
         
-        Use markdown formatting for clear organization.
+        Format your response as:
+        # [Creative Topic-Specific Title]
+        
+        ### Key Insights
+        [Integrated analysis with proper markdown formatting]
+        
+        ### Synthesis of Perspectives
+        [Combined insights with proper markdown formatting]
+        
+        ### Conclusions and Implications
+        [Final analysis with proper markdown formatting]
         """
         
         response = model.generate_content(
