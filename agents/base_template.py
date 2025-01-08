@@ -13,10 +13,12 @@ class RateLimiter:
         self.last_request_time = 0
         self.requests_this_minute = 0
         self.requests_today = 0
-        self.MIN_REQUEST_INTERVAL = 0.5  # 500ms between requests
-        self.MAX_RPM = 10   # Reduced from 30 to 10 requests per minute
-        self.MAX_RPD = 500  # Reduced from 1000 to 500 requests per day
+        self.MIN_REQUEST_INTERVAL = 1.0  # 1 second between requests
+        self.MAX_RPM = 5    # Reduced from 10 to 5 requests per minute
+        self.MAX_RPD = 250  # Reduced from 500 to 250 requests per day
         self.last_reset_time = time.time()
+        self.consecutive_failures = 0
+        self.last_error_time = 0
         
     @classmethod
     def get_instance(cls):
@@ -26,10 +28,19 @@ class RateLimiter:
                     cls._instance = cls()
         return cls._instance
     
+    def _calculate_backoff_time(self):
+        """Calculate exponential backoff time based on consecutive failures."""
+        if self.consecutive_failures == 0:
+            return 0
+        # Base wait time is 2^n seconds where n is the number of consecutive failures
+        # Cap at 5 minutes maximum wait
+        return min(2 ** self.consecutive_failures, 300)
+    
     def _should_reset_counters(self, current_time):
         """Check if counters should be reset based on time elapsed."""
         minutes_elapsed = (current_time - self.last_request_time) / 60
         days_elapsed = (current_time - self.last_reset_time) / (24 * 60 * 60)
+        error_elapsed = (current_time - self.last_error_time) / 60
         
         if minutes_elapsed >= 1:
             self.requests_this_minute = 0
@@ -38,6 +49,18 @@ class RateLimiter:
         if days_elapsed >= 1:
             self.requests_today = 0
             self.last_reset_time = current_time
+        
+        # Reset failure count if no errors in 5 minutes
+        if error_elapsed >= 5:
+            self.consecutive_failures = 0
+    
+    def handle_error(self, error_str: str):
+        """Handle rate limit errors and update backoff strategy."""
+        if "RATE_LIMIT_EXCEEDED" in error_str:
+            self.consecutive_failures += 1
+            self.last_error_time = time.time()
+            backoff_time = self._calculate_backoff_time()
+            time.sleep(backoff_time)
     
     def wait_if_needed(self):
         """Check rate limits and wait if necessary."""
@@ -46,6 +69,11 @@ class RateLimiter:
             
             # Reset counters if needed
             self._should_reset_counters(current_time)
+            
+            # Apply exponential backoff if we've had failures
+            backoff_time = self._calculate_backoff_time()
+            if backoff_time > 0:
+                time.sleep(backoff_time)
             
             # Check if we've hit the daily limit
             if self.requests_today >= self.MAX_RPD:
@@ -164,46 +192,66 @@ class BaseAgent:
     
     def generate_response(self, user_input: list, previous_responses: List[str] = None, stream: bool = True) -> Generator[str, None, None]:
         """Generate a response to the input, considering previous agent responses."""
-        try:
-            # Wait for rate limiter
-            self.rate_limiter.wait_if_needed()
-            
-            # Prepare complete prompt
-            prompt = self.prepare_prompt(user_input, previous_responses)
-            
-            # Generate response
-            response = self.model.generate_content(
-                prompt,
-                generation_config={
-                    'temperature': self.config.temperature,
-                    'top_p': self.config.top_p,
-                    'top_k': self.config.top_k,
-                    'max_output_tokens': self.config.max_output_tokens,
-                },
-                stream=stream
-            )
-            
-            if stream:
-                full_response = ""
-                for chunk in response:
-                    if chunk.text:
-                        full_response += chunk.text
-                        yield chunk.text
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                # Wait for rate limiter
+                self.rate_limiter.wait_if_needed()
                 
-                # Add to history with role context
-                self.add_to_history({
-                    'role': 'assistant',
-                    'agent': self.role,
-                    'content': full_response
-                })
-            else:
-                # Add to history with role context
-                self.add_to_history({
-                    'role': 'assistant',
-                    'agent': self.role,
-                    'content': response.text
-                })
-                yield response.text
-            
-        except Exception as e:
-            yield f"Error generating response: {str(e)}" 
+                # Prepare complete prompt
+                prompt = self.prepare_prompt(user_input, previous_responses)
+                
+                # Generate response
+                response = self.model.generate_content(
+                    prompt,
+                    generation_config={
+                        'temperature': self.config.temperature,
+                        'top_p': self.config.top_p,
+                        'top_k': self.config.top_k,
+                        'max_output_tokens': self.config.max_output_tokens,
+                    },
+                    stream=stream
+                )
+                
+                if stream:
+                    full_response = ""
+                    for chunk in response:
+                        if chunk.text:
+                            full_response += chunk.text
+                            yield chunk.text
+                    
+                    # Add to history with role context
+                    self.add_to_history({
+                        'role': 'assistant',
+                        'agent': self.role,
+                        'content': full_response
+                    })
+                else:
+                    # Add to history with role context
+                    self.add_to_history({
+                        'role': 'assistant',
+                        'agent': self.role,
+                        'content': response.text
+                    })
+                    yield response.text
+                
+                # Successful response, break the retry loop
+                break
+                
+            except Exception as e:
+                error_str = str(e)
+                # Handle rate limit errors with exponential backoff
+                self.rate_limiter.handle_error(error_str)
+                
+                retry_count += 1
+                if retry_count >= max_retries:
+                    if "RATE_LIMIT_EXCEEDED" in error_str:
+                        yield "Rate limit exceeded. Please wait a moment before trying again."
+                    else:
+                        yield f"Error generating response after {max_retries} retries: {error_str}"
+                    return
+                
+                # Wait before retrying
+                time.sleep(2 ** retry_count)  # Exponential backoff for retries 
