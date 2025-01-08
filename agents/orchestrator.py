@@ -164,23 +164,32 @@ class AgentOrchestrator:
     def _extract_specialists(self, analysis: str) -> List[Dict[str, str]]:
         """Extract required specialists from analysis."""
         specialists = []
-        pattern = r"DOMAIN:\s*([^\n]+).*?EXPERTISE:\s*([^\n]+).*?FOCUS:\s*([^\n]+)"
-        matches = re.finditer(pattern, analysis, re.DOTALL)
         
-        for match in matches:
-            domain = match.group(1).strip().lower()
-            expertise = match.group(2).strip()
-            focus = match.group(3).strip()
+        # Extract main topics from the analysis
+        topics = re.findall(r'\d+\.\s+([^:\n]+)(?=:|\n)', analysis)
+        
+        for topic in topics[:3]:  # Limit to 3 specialists
+            # Clean up the topic name
+            domain = topic.strip().lower()
+            if 'ecosystem' in domain:
+                domain = 'ecology'
+            elif 'conservation' in domain:
+                domain = 'conservation'
+            elif 'biodiversity' in domain:
+                domain = 'biology'
+            elif 'geography' in domain or 'location' in domain:
+                domain = 'geography'
             
-            if domain and expertise and focus:
-                specialists.append({
-                    'domain': domain,
-                    'expertise': expertise,
-                    'focus': focus,
-                    'avatar': self._get_domain_avatar(domain)
-                })
+            # Create specialist entry
+            specialist = {
+                'domain': domain,
+                'expertise': topic.strip(),
+                'focus': f"Analyze and provide insights about {topic.strip().lower()}",
+                'avatar': self._get_domain_avatar(domain)
+            }
+            specialists.append(specialist)
         
-        return specialists[:3]  # Limit to 3 specialists
+        return specialists[:3]  # Ensure we don't exceed 3 specialists
     
     def _get_domain_avatar(self, domain: str) -> str:
         """Get avatar emoji for domain."""

@@ -521,7 +521,6 @@ def display_message(message: dict, container=None):
     
     # Store placeholders in session state to persist across reruns
     container_id = str(id(container))
-    title_key = f"title_{container_id}"
     content_key = f"content_{container_id}"
     
     if content_key not in st.session_state:
@@ -544,11 +543,10 @@ def display_message(message: dict, container=None):
                 }
                 title = title_map.get(message_type, "Assistant")
             
-            # Display title only once per container
-            if title_key not in st.session_state:
+            # Display title at the top of the container
+            if not is_streaming or content == "":
                 container.markdown(f"### {title}")
                 container.markdown("---")
-                st.session_state[title_key] = True
             
             # Add AI content warning for synthesis
             if message_type == "synthesis":
@@ -556,6 +554,9 @@ def display_message(message: dict, container=None):
             
             # Display content (streaming or complete)
             if content:
+                # Remove any markdown titles from the content
+                content = re.sub(r'#+ .*?\n', '', content)
+                # Remove markdown formatting from text
                 content = re.sub(r'\*{1,2}([^\*]+)\*{1,2}', r'\1', content)
                 st.session_state[content_key].markdown(content)
             
@@ -582,7 +583,7 @@ def display_message(message: dict, container=None):
                             st.rerun()
                 elif message_type != "suggestions":
                     if st.button("📋 Copy", key=f"copy_{message_type}_{hash(content)}_{int(time.time())}"):
-                        copy_to_clipboard(content)
+                            copy_to_clipboard(content)
     
     return container
 
