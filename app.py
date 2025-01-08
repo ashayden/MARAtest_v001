@@ -852,10 +852,13 @@ def display_message(message: dict):
             agent_name = "Follow-up Questions"
 
         with st.chat_message("assistant", avatar=avatar):
-            # Remove emoji from agent name if it appears in the title
-            if avatar in agent_name:
-                agent_name = agent_name.replace(avatar, "").strip()
-            st.markdown(f"**{avatar} {agent_name}**")
+            # Clean up agent name and remove any emojis
+            agent_name = agent_name.strip()
+            for emoji in ['🎯', '📚', '🎭', '🎵', '🍳', '🏛️', '🎨', '📖', '🗺️', '📈', '👥', '⚖️', '🔬', '💻', '🌿', '⚽', '🕊️', '🤔', '📊', '💡', '🔍', '🤖']:
+                agent_name = agent_name.replace(emoji, '').strip()
+            
+            # Display title with single emoji at start
+            st.markdown(f"{avatar} **{agent_name}**")
             st.markdown("---")
             st.markdown(content)
 
