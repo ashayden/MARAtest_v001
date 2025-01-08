@@ -521,14 +521,15 @@ def display_message(message: dict, container=None):
     
     # Store placeholders in session state to persist across reruns
     container_id = str(id(container))
-    placeholder_key = f"placeholder_{container_id}"
+    title_key = f"title_{container_id}"
+    content_key = f"content_{container_id}"
     
-    if placeholder_key not in st.session_state:
-        st.session_state[placeholder_key] = container.empty()
+    if content_key not in st.session_state:
+        st.session_state[content_key] = container.empty()
     
     with container:
         if role == 'user':
-            st.session_state[placeholder_key].markdown(content)
+            st.session_state[content_key].markdown(content)
         
         elif role == 'assistant':
             # Clean title formatting
@@ -543,9 +544,11 @@ def display_message(message: dict, container=None):
                 }
                 title = title_map.get(message_type, "Assistant")
             
-            # Always display title for assistant messages
-            container.markdown(f"### {title}")
-            container.markdown("---")
+            # Display title only once per container
+            if title_key not in st.session_state:
+                container.markdown(f"### {title}")
+                container.markdown("---")
+                st.session_state[title_key] = True
             
             # Add AI content warning for synthesis
             if message_type == "synthesis":
@@ -554,7 +557,7 @@ def display_message(message: dict, container=None):
             # Display content (streaming or complete)
             if content:
                 content = re.sub(r'\*{1,2}([^\*]+)\*{1,2}', r'\1', content)
-                st.session_state[placeholder_key].markdown(content)
+                st.session_state[content_key].markdown(content)
             
             # Only show actions when streaming is complete
             if not is_streaming:
@@ -654,11 +657,37 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                 }
                 specialist_container = display_message(specialist_message)
                 
-                # Stream specialist response
+                # Generate specialist response
+                model = genai.GenerativeModel(
+                    'gemini-2.0-flash-exp',
+                    generation_config=orchestrator._specialist_config
+                )
+                
+                prompt_template = """You are an expert {domain} specialist with expertise in {expertise}.
+                
+                Focus your analysis on: {focus}
+                
+                Analyze the following topic from your specialist perspective:
+                {prompt}
+                
+                Consider this initial analysis:
+                {initial_analysis}
+                
+                Provide a detailed specialist analysis focusing on your domain expertise.
+                """
+                
+                formatted_prompt = prompt_template.format(
+                    domain=specialist['domain'],
+                    expertise=specialist['expertise'],
+                    focus=specialist['focus'],
+                    prompt=prompt,
+                    initial_analysis=initial_response
+                )
+                
                 specialist_response = ""
-                for chunk in orchestrator.process_specialist(specialist, parts, initial_response):
-                    if chunk:
-                        specialist_response += chunk
+                for chunk in model.generate_content(formatted_prompt, stream=True):
+                    if chunk.text:
+                        specialist_response += chunk.text
                         specialist_message["content"] = specialist_response
                         display_message(specialist_message, specialist_container)
                 
@@ -670,6 +699,9 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     st.session_state.messages.append(specialist_message)
                     st.session_state.specialist_responses[domain] = specialist_response
                     synthesis_inputs.append({'text': specialist_response})
+                
+                # Add delay between specialists to manage rate limits
+                time.sleep(2)
         
         # Generate synthesis with streaming
         if st.session_state.specialist_responses:
@@ -683,9 +715,25 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             }
             synthesis_container = display_message(synthesis_message)
             
+            synthesis_prompt = f"""Create a comprehensive synthesis report for the following topic:
+            {prompt}
+            
+            Incorporating insights from these specialists:
+            {', '.join(st.session_state.specialist_responses.keys())}
+            
+            Requirements:
+            1. Begin with a clear title
+            2. Organize content in numbered sections
+            3. Integrate specialist perspectives
+            4. Maintain academic tone
+            5. End with key conclusions
+            
+            Format the report in markdown with clear section headings.
+            """
+            
             synthesis = ""
             for chunk in orchestrator.agents['reasoner'].generate_content(
-                parts[0]['text'],
+                synthesis_prompt,
                 stream=True
             ):
                 if chunk.text:
