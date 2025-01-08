@@ -218,6 +218,8 @@ Avoid:
                     return
                 
                 # Process specialists in sequence with rate limiting
+                specialist_responses = []  # Track all specialist responses
+                
                 for specialist in specialists[:3]:  # Limit to 3 specialists
                     domain = specialist['domain']
                     try:
@@ -237,16 +239,21 @@ Avoid:
                         
                         # Generate specialist response with retry
                         retry_count = 0
-                        while retry_count < 3:
+                        specialist_response = ""
+                        success = False
+                        
+                        while retry_count < 3 and not success:
                             try:
                                 for chunk in self.agents[domain].generate_response(
                                     normalized_input,
                                     previous_responses=[initial_response],
                                     stream=True
                                 ):
-                                    if chunk and stream:
-                                        yield chunk
-                                break  # Success, exit retry loop
+                                    if chunk:
+                                        specialist_response += chunk
+                                        if stream:
+                                            yield chunk
+                                success = True  # Mark as successful if no exception
                             except Exception as e:
                                 retry_count += 1
                                 if retry_count < 3:
@@ -254,50 +261,67 @@ Avoid:
                                     self.agents[domain].config.max_output_tokens = 512
                                     continue
                                 else:
-                                    raise e
+                                    yield f"\nError with {domain} specialist: {str(e)}"
+                                    break
+                        
+                        if success and specialist_response:
+                            specialist_responses.append({
+                                'domain': domain,
+                                'response': specialist_response
+                            })
                         
                     except Exception as e:
                         yield f"\nError with {domain} specialist: {str(e)}"
                         continue
                 
-                # Generate final synthesis
-                try:
-                    yield "\n### FINAL_SYNTHESIS:\n"
-                    
-                    # Wait for rate limiter
-                    rate_limiter.wait_if_needed(timeout=15)
-                    
-                    # Generate synthesis with retry
-                    retry_count = 0
-                    while retry_count < 3:
-                        try:
-                            for chunk in self.agents['reasoner'].generate_response(
-                                normalized_input,
-                                previous_responses=[initial_response],
-                                stream=True
-                            ):
-                                if chunk and stream:
-                                    yield chunk
-                            break  # Success, exit retry loop
-                        except Exception as e:
-                            retry_count += 1
-                            if retry_count < 3:
-                                time.sleep(2 ** retry_count)
-                                self.agents['reasoner'].config.max_output_tokens = 1024
-                                continue
-                            else:
-                                raise e
-                            
-                except Exception as e:
-                    yield f"\nError in synthesis: {str(e)}"
-                    return
+                # Only proceed with synthesis if we have specialist responses
+                if specialist_responses:
+                    try:
+                        yield "\n### FINAL_SYNTHESIS:\n"
+                        
+                        # Wait for rate limiter
+                        rate_limiter.wait_if_needed(timeout=15)
+                        
+                        # Prepare synthesis input
+                        synthesis_input = [{'text': initial_response}]
+                        synthesis_input.extend({'text': resp['response']} for resp in specialist_responses)
+                        
+                        # Generate synthesis with retry
+                        retry_count = 0
+                        synthesis_response = ""
+                        success = False
+                        
+                        while retry_count < 3 and not success:
+                            try:
+                                for chunk in self.agents['reasoner'].generate_response(
+                                    normalized_input,
+                                    previous_responses=synthesis_input,
+                                    stream=True
+                                ):
+                                    if chunk and stream:
+                                        synthesis_response += chunk
+                                        yield chunk
+                                success = True
+                            except Exception as e:
+                                retry_count += 1
+                                if retry_count < 3:
+                                    time.sleep(2 ** retry_count)
+                                    self.agents['reasoner'].config.max_output_tokens = 1024
+                                    continue
+                                else:
+                                    yield f"\nError in synthesis: {str(e)}"
+                                    break
+                        
+                    except Exception as e:
+                        yield f"\nError in synthesis: {str(e)}"
+                else:
+                    yield "\nNo specialist responses available for synthesis."
                 
             except Exception as e:
                 if "RATE_LIMIT_EXCEEDED" in str(e):
                     yield "Rate limit exceeded. Please wait a moment before trying again."
                 else:
                     yield f"Error in processing: {str(e)}"
-                return
             
         except Exception as e:
             yield f"Error in input processing: {str(e)}" 

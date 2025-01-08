@@ -594,10 +594,6 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         synthesis_inputs = [{'text': initial_response}]  # Start with initial analysis
         
         if specialists:
-            # Get rate limiter instance
-            from agents.base_template import RateLimiter
-            rate_limiter = RateLimiter.get_instance()
-            
             for i, specialist in enumerate(specialists):
                 try:
                     domain = specialist['domain']
@@ -606,64 +602,34 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     # Add delay between specialists
                     if i > 0:
                         time.sleep(2)  # 2 second delay between specialists
-                        rate_limiter.wait_if_needed(timeout=10)  # Wait for rate limit with timeout
+                    rate_limiter.wait_if_needed(timeout=10)  # Wait for rate limit with timeout
                     
-                    # Create new specialist with specific expertise
-                    orchestrator.agents[domain] = orchestrator.create_specialist(
+                    # Create specialist with reduced token limit
+                    specialist_agent = orchestrator.create_specialist(
                         domain=domain,
                         expertise=specialist['expertise'],
                         focus_areas=specialist['focus']
                     )
+                    specialist_agent.config.max_output_tokens = 1024
                     
-                    # Generate specialist response with reduced tokens
-                    specialist_config = orchestrator.agents[domain].config
-                    specialist_config.max_output_tokens = min(specialist_config.max_output_tokens, 1024)  # Limit token usage
+                    # Generate specialist response with retry
+                    retry_count = 0
+                    specialist_response = None
                     
-                    specialist_response = ""
-                    for chunk in orchestrator.agents[domain].generate_response(
-                        parts,
-                        previous_responses=[initial_response],  # Only pass initial analysis
-                        stream=True
-                    ):
-                        if chunk:
-                            specialist_response += chunk
-                    
-                    if specialist_response:
-                        # Create specialist message
-                        specialist_message = {
-                            "role": "assistant",
-                            "type": "specialist",
-                            "domain": domain,
-                            "content": specialist_response,
-                            "avatar": get_domain_avatar(domain)
-                        }
-                        st.session_state.messages.append(specialist_message)
-                        st.session_state.specialist_responses[domain] = specialist_response
-                        synthesis_inputs.append({'text': specialist_response})
-                        
-                        # Update display without full rerun
-                        with st.empty():
-                            display_message(specialist_message)
-                    
-                except Exception as e:
-                    if "RATE_LIMIT_EXCEEDED" in str(e):
-                        error_container.warning(f"Rate limit reached for {domain} specialist. Waiting to retry...")
-                        time.sleep(5)  # Wait 5 seconds before continuing
+                    while retry_count < 3 and not specialist_response:
                         try:
-                            # Retry once with reduced tokens
-                            specialist_config = orchestrator.agents[domain].config
-                            specialist_config.max_output_tokens = 512  # Reduce tokens for retry
-                            
-                            specialist_response = ""
-                            for chunk in orchestrator.agents[domain].generate_response(
+                            response_text = ""
+                            for chunk in specialist_agent.generate_response(
                                 parts,
                                 previous_responses=[initial_response],
                                 stream=True
                             ):
                                 if chunk:
-                                    specialist_response += chunk
+                                    response_text += chunk
                             
-                            if specialist_response:
+                            if response_text:
+                                specialist_response = response_text
+                                # Create specialist message
                                 specialist_message = {
                                     "role": "assistant",
                                     "type": "specialist",
@@ -675,12 +641,21 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                                 st.session_state.specialist_responses[domain] = specialist_response
                                 synthesis_inputs.append({'text': specialist_response})
                                 
+                                # Update display without full rerun
                                 with st.empty():
                                     display_message(specialist_message)
-                        except Exception:
-                            error_container.error(f"Could not process {domain} specialist after retry. Continuing with available responses.")
-                    else:
-                        error_container.error(f"Error with {domain} specialist: {str(e)}")
+                            
+                        except Exception as e:
+                            retry_count += 1
+                            if retry_count < 3:
+                                error_container.warning(f"Retrying {domain} specialist (attempt {retry_count + 1}/3)...")
+                                time.sleep(2 ** retry_count)
+                                specialist_agent.config.max_output_tokens = 512
+                            else:
+                                error_container.error(f"Could not complete {domain} specialist analysis after 3 attempts.")
+                    
+                except Exception as e:
+                    error_container.error(f"Error with {domain} specialist: {str(e)}")
                     continue
         
         # Only proceed with synthesis if we have specialist responses
@@ -689,50 +664,62 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             update_progress("Synthesizing insights...")
             
             synthesis = ""
-            try:
-                for chunk in orchestrator.agents['reasoner'].generate_response(
-                    parts,
-                    previous_responses=synthesis_inputs,
-                    stream=True
-                ):
-                    if chunk:
-                        synthesis += chunk
-                
-                if synthesis:
-                    # Create synthesis message
-                    synthesis_message = {
-                        "role": "assistant",
-                        "type": "synthesis",
-                        "content": synthesis,
-                        "avatar": "📊"
-                    }
-                    st.session_state.messages.append(synthesis_message)
+            retry_count = 0
+            
+            while retry_count < 3 and not synthesis:
+                try:
+                    rate_limiter.wait_if_needed(timeout=15)  # Wait for rate limit with timeout
                     
-                    # Update display without full rerun
-                    with st.empty():
-                        display_message(synthesis_message)
+                    for chunk in orchestrator.agents['reasoner'].generate_response(
+                        parts,
+                        previous_responses=synthesis_inputs,
+                        stream=True
+                    ):
+                        if chunk:
+                            synthesis += chunk
                     
-                    # Generate suggestions
-                    update_progress("Generating follow-up questions...")
-                    try:
-                        suggestions = generate_suggestions(synthesis)
-                        if suggestions:
-                            suggestions_message = {
-                                "role": "assistant",
-                                "type": "suggestions",
-                                "suggestions": suggestions,
-                                "avatar": "💡"
-                            }
-                            st.session_state.messages.append(suggestions_message)
-                            
-                            # Update display without full rerun
-                            with st.empty():
-                                display_message(suggestions_message)
-                    except Exception as e:
-                        error_container.error(f"Error generating suggestions: {str(e)}")
-            except Exception as e:
-                error_container.error(f"Error in synthesis: {str(e)}")
-                synthesis = None
+                    if synthesis:
+                        # Create synthesis message
+                        synthesis_message = {
+                            "role": "assistant",
+                            "type": "synthesis",
+                            "content": synthesis,
+                            "avatar": "📊"
+                        }
+                        st.session_state.messages.append(synthesis_message)
+                        
+                        # Update display without full rerun
+                        with st.empty():
+                            display_message(synthesis_message)
+                        
+                        # Generate suggestions
+                        update_progress("Generating follow-up questions...")
+                        try:
+                            suggestions = generate_suggestions(synthesis)
+                            if suggestions:
+                                suggestions_message = {
+                                    "role": "assistant",
+                                    "type": "suggestions",
+                                    "suggestions": suggestions,
+                                    "avatar": "💡"
+                                }
+                                st.session_state.messages.append(suggestions_message)
+                                
+                                # Update display without full rerun
+                                with st.empty():
+                                    display_message(suggestions_message)
+                        except Exception as e:
+                            error_container.error(f"Error generating suggestions: {str(e)}")
+                    
+                except Exception as e:
+                    retry_count += 1
+                    if retry_count < 3:
+                        error_container.warning(f"Retrying synthesis (attempt {retry_count + 1}/3)...")
+                        time.sleep(2 ** retry_count)
+                        orchestrator.agents['reasoner'].config.max_output_tokens = 1024
+                    else:
+                        error_container.error("Could not complete synthesis after 3 attempts.")
+                        synthesis = None
         
         # Update status to complete
         status_container.write("Complete!")
