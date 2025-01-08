@@ -523,6 +523,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
     status_container = st.empty()
     error_container = st.empty()
     error_details_container = st.empty()
+    synthesis = None  # Initialize synthesis variable
     
     try:
         def update_progress(message):
@@ -660,47 +661,51 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             update_progress("Synthesizing insights...")
             
             synthesis = ""
-            for chunk in orchestrator.agents['reasoner'].generate_response(
-                parts,
-                previous_responses=synthesis_inputs,
-                stream=True
-            ):
-                if chunk:
-                    synthesis += chunk
-            
-            if synthesis:
-                # Create synthesis message
-                synthesis_message = {
-                    "role": "assistant",
-                    "type": "synthesis",
-                    "content": synthesis,
-                    "avatar": "📊"
-                }
-                st.session_state.messages.append(synthesis_message)
+            try:
+                for chunk in orchestrator.agents['reasoner'].generate_response(
+                    parts,
+                    previous_responses=synthesis_inputs,
+                    stream=True
+                ):
+                    if chunk:
+                        synthesis += chunk
                 
-                # Update display without full rerun
-                with st.empty():
-                    display_message(synthesis_message)
-                
-                # Generate suggestions
-                update_progress("Generating follow-up questions...")
-                try:
-                    suggestions = generate_suggestions(synthesis)
-                    if suggestions:
-                        suggestions_message = {
-                            "role": "assistant",
-                            "type": "suggestions",
-                            "suggestions": suggestions,
-                            "avatar": "💡"
-                        }
-                        st.session_state.messages.append(suggestions_message)
-                        
-                        # Update display without full rerun
-                        with st.empty():
-                            display_message(suggestions_message)
-                except Exception as e:
-                    error_container.error(f"Error generating suggestions: {str(e)}")
-            
+                if synthesis:
+                    # Create synthesis message
+                    synthesis_message = {
+                        "role": "assistant",
+                        "type": "synthesis",
+                        "content": synthesis,
+                        "avatar": "📊"
+                    }
+                    st.session_state.messages.append(synthesis_message)
+                    
+                    # Update display without full rerun
+                    with st.empty():
+                        display_message(synthesis_message)
+                    
+                    # Generate suggestions
+                    update_progress("Generating follow-up questions...")
+                    try:
+                        suggestions = generate_suggestions(synthesis)
+                        if suggestions:
+                            suggestions_message = {
+                                "role": "assistant",
+                                "type": "suggestions",
+                                "suggestions": suggestions,
+                                "avatar": "💡"
+                            }
+                            st.session_state.messages.append(suggestions_message)
+                            
+                            # Update display without full rerun
+                            with st.empty():
+                                display_message(suggestions_message)
+                    except Exception as e:
+                        error_container.error(f"Error generating suggestions: {str(e)}")
+            except Exception as e:
+                error_container.error(f"Error in synthesis: {str(e)}")
+                synthesis = None
+        
         # Update status to complete
         status_container.write("Complete!")
         return synthesis
