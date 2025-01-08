@@ -519,6 +519,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
     # Create containers outside the try block
     status_container = st.empty()
     error_container = st.empty()
+    error_details_container = st.empty()
     
     try:
         def update_progress(message):
@@ -554,33 +555,30 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             with st.empty():
                 display_message(initial_message)
         
-        # Extract text content for specialist identification
-        text_content = ""
-        for part in parts:
-            if 'text' in part:
-                text_content += part['text'] + "\n"
-        
-        # Identify required specialists
-        update_progress("Identifying required specialists...")
-        domains = orchestrator.identify_required_specialists(text_content.strip())
-        st.session_state.current_domains = domains
+        # Extract specialists directly from initial analysis
+        specialists = orchestrator.extract_specialists_from_analysis(initial_response)
         
         # Process specialist responses
         synthesis_inputs = [{'text': initial_response}]  # Start with initial analysis
         
-        if domains:
-            for domain in domains:
+        if specialists:
+            for specialist in specialists:
                 try:
+                    domain = specialist['domain']
                     update_progress(f"Consulting {domain.title()} specialist...")
                     
-                    if domain not in orchestrator.agents:
-                        orchestrator.agents[domain] = orchestrator.create_specialist(domain)
+                    # Create new specialist with specific expertise
+                    orchestrator.agents[domain] = orchestrator.create_specialist(
+                        domain=domain,
+                        expertise=specialist['expertise'],
+                        focus_areas=specialist['focus']
+                    )
                     
                     # Generate specialist response
                     specialist_response = ""
                     for chunk in orchestrator.agents[domain].generate_response(
                         parts,
-                        previous_responses=synthesis_inputs,
+                        previous_responses=[initial_response],  # Only pass initial analysis
                         stream=True
                     ):
                         if chunk:
@@ -607,8 +605,8 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                     error_container.error(f"Error with {domain} specialist: {str(e)}")
                     continue
         
-        # Only proceed with synthesis if we have all specialist responses
-        if len(st.session_state.specialist_responses) == len(domains):
+        # Only proceed with synthesis if we have specialist responses
+        if st.session_state.specialist_responses:
             # Generate final synthesis
             update_progress("Synthesizing insights...")
             
@@ -660,8 +658,9 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         
     except Exception as e:
         error_container.error(f"Error: {str(e)}")
-        if st.checkbox("Show detailed error"):
-            st.error("Full error details:", exc_info=True)
+        error_details = st.expander("Show error details")
+        with error_details:
+            st.code(traceback.format_exc())
         return None
 
 def chat_interface():
@@ -851,6 +850,9 @@ def display_message(message: dict):
             agent_name = "Follow-up Questions"
 
         with st.chat_message("assistant", avatar=avatar):
+            # Remove emoji from agent name if it appears in the title
+            if avatar in agent_name:
+                agent_name = agent_name.replace(avatar, "").strip()
             st.markdown(f"**{avatar} {agent_name}**")
             st.markdown("---")
             st.markdown(content)
