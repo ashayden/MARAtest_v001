@@ -741,14 +741,24 @@ def chat_interface():
                 #### 1. Initial Analysis Agent (Fixed Settings)
                 - Temperature: 0.5 (balanced)
                 - Purpose: Analyzes input and identifies required expertise
-                - Determines which specialists to consult
+                - Selects up to 3 most relevant domain specialists
                 - Provides initial context framework
                 
                 #### 2. Domain Specialists (Adjustable Settings)
-                - Created dynamically based on input topic
-                - Expertise determined in real-time
-                - Controlled by model settings
-                - Each specialist provides domain-specific insights
+                Available domains include:
+                - History, Culture, Music
+                - Art, Literature, Architecture
+                - Geography, Environment
+                - Economics, Politics
+                - Science, Technology
+                - Sociology, Philosophy
+                - Sports, Religion, Food
+                
+                Each specialist:
+                - Is created dynamically based on identified needs
+                - Uses adjustable model settings
+                - Provides domain-specific insights
+                - Maintains academic writing style
                 
                 #### 3. Synthesis Agent (Fixed Settings)
                 - Temperature: 0.3 (focused)

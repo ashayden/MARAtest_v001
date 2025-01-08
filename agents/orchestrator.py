@@ -189,8 +189,18 @@ Avoid:
             elif isinstance(input_text, list) and input_text and isinstance(input_text[0], dict) and 'text' in input_text[0]:
                 input_text = input_text[0]['text']
             
+            # List available domains that match our specialist configurations
+            available_domains = [
+                'history', 'culture', 'music', 'food', 'architecture', 'art',
+                'literature', 'geography', 'economics', 'sociology', 'politics',
+                'science', 'technology', 'environment', 'sports', 'religion',
+                'philosophy'
+            ]
+            
             prompt = f"""Analyze the following input and identify the key domains of expertise needed.
+            Choose ONLY from these available domains: {', '.join(available_domains)}
             Return only the domain names, separated by commas. Keep domain names simple and lowercase.
+            Choose at most 3 most relevant domains.
             Example: history, architecture, culture
             
             Input: {input_text}
@@ -205,10 +215,10 @@ Avoid:
             domains = []
             for domain in response.text.split(','):
                 domain = domain.strip().lower()
-                if domain:  # Only add non-empty domains
+                if domain in available_domains:  # Only add valid domains
                     domains.append(domain)
             
-            return domains if domains else ['general']  # Fallback to general if no domains found
+            return domains[:3] if domains else ['general']  # Limit to 3 domains
             
         except Exception as e:
             print(f"Error identifying specialists: {str(e)}")
