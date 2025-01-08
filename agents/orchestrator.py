@@ -40,8 +40,20 @@ class AgentOrchestrator:
         1. Analyze user input to identify key topics and required expertise
         2. Determine which specialized agents should be consulted
         3. Structure the initial response framework
-        4. Highlight specific aspects for each specialist to address
+        4. For each identified domain:
+           - Specify the exact domain name
+           - Define the required expertise and focus areas
+           - Outline specific aspects to analyze
         5. Maintain coherence across agent contributions
+        
+        Format your analysis with clear sections:
+        1. Overview of the topic
+        2. Key Topics and Required Expertise:
+           For each domain list:
+           DOMAIN: [domain_name]
+           EXPERTISE: [specific areas of expertise needed]
+           FOCUS: [key aspects to analyze]
+        3. Analysis Framework
         
         Keep your analysis technical and focused on identifying the required expertise.
         Do not include any first-person pronouns or references to being an AI.
@@ -83,104 +95,42 @@ class AgentOrchestrator:
         - Use markdown for structure
         """
     
-    def create_specialist(self, domain: str) -> BaseAgent:
-        """Create a specialist agent for a specific domain."""
+    def create_specialist(self, domain: str, expertise: str, focus_areas: str) -> BaseAgent:
+        """Create a specialist agent for a specific domain with defined expertise and focus areas."""
         
-        # Base prompt template for all specialists
-        base_prompt = """You are an expert {domain} specialist. Analyze the provided content focusing specifically on {domain_description}.
-        
-Your analysis should:
-1. Be thorough and insightful
-2. Focus exclusively on {domain}-related aspects
-3. Provide specific examples and evidence
+        # Create specialized prompt based on domain requirements
+        specialist_prompt = f"""You are an expert {domain} specialist with specific expertise in {expertise}.
+
+Your analysis should focus on: {focus_areas}
+
+Analysis Requirements:
+1. Be thorough and evidence-based
+2. Focus exclusively on your assigned domain and expertise
+3. Provide specific examples and data
 4. Draw meaningful connections within your domain
-5. Maintain a professional, academic tone
+5. Maintain academic rigor
 
 Format your response with:
-1. A clear, specific title that reflects the key {domain} insights
-2. Well-organized sections with clear headings
-3. Concise, focused paragraphs
-4. Specific examples and evidence
+1. Clear section headings
+2. Well-organized analysis
+3. Specific evidence and citations
+4. Domain-specific insights
 
 Avoid:
-- General introductions or meta-commentary
-- Straying from your domain expertise
-- Repeating information without adding insight
-- Making unsupported claims"""
-
-        # Domain-specific descriptions and configurations
-        domain_configs = {
-            'history': {
-                'description': 'historical context, development, and significance',
-                'title_prefix': 'Historical Analysis'
-            },
-            'culture': {
-                'description': 'cultural significance, traditions, and social practices',
-                'title_prefix': 'Cultural Perspective'
-            },
-            'geography': {
-                'description': 'geographical features, spatial relationships, and environmental factors',
-                'title_prefix': 'Geographic Analysis'
-            },
-            'urban_planning': {
-                'description': 'urban development, city planning, and infrastructure',
-                'title_prefix': 'Urban Development Analysis'
-            },
-            'economics': {
-                'description': 'economic factors, market dynamics, and financial implications',
-                'title_prefix': 'Economic Impact Analysis'
-            },
-            'architecture': {
-                'description': 'architectural styles, building techniques, and design principles',
-                'title_prefix': 'Architectural Analysis'
-            },
-            'sociology': {
-                'description': 'social structures, community dynamics, and demographic patterns',
-                'title_prefix': 'Sociological Analysis'
-            },
-            'art': {
-                'description': 'artistic expressions, visual elements, and creative influences',
-                'title_prefix': 'Artistic Analysis'
-            },
-            'literature': {
-                'description': 'literary works, written traditions, and narrative elements',
-                'title_prefix': 'Literary Analysis'
-            },
-            'music': {
-                'description': 'musical traditions, styles, and cultural significance',
-                'title_prefix': 'Musical Heritage Analysis'
-            },
-            'food': {
-                'description': 'culinary traditions, food culture, and gastronomy',
-                'title_prefix': 'Culinary Analysis'
-            },
-            'religion': {
-                'description': 'religious practices, beliefs, and spiritual significance',
-                'title_prefix': 'Religious Context Analysis'
-            }
-        }
-        
-        # Get domain configuration or use defaults
-        domain_config = domain_configs.get(domain, {
-            'description': f'{domain}-related aspects and implications',
-            'title_prefix': f'{domain.title()} Analysis'
-        })
-        
-        # Create the specialized prompt
-        specialized_prompt = base_prompt.format(
-            domain=domain.title(),
-            domain_description=domain_config['description']
-        )
+- Straying from your assigned focus areas
+- Making unsupported claims
+- Repeating information without insight
+- Using first-person pronouns or AI references"""
         
         # Create and return the specialist agent
         specialist = BaseAgent(
             config=self.config,
             role=f"{domain}_specialist"
         )
-        specialist.system_prompt = specialized_prompt
+        specialist.system_prompt = specialist_prompt
         return specialist
     
-    def identify_required_specialists(self, input_text: str) -> List[str]:
+    def identify_required_specialists(self, input_text: str) -> List[Dict[str, str]]:
         """Analyze input to determine required specialist expertise."""
         try:
             # Ensure input_text is a string
@@ -189,30 +139,49 @@ Avoid:
             elif isinstance(input_text, list) and input_text and isinstance(input_text[0], dict) and 'text' in input_text[0]:
                 input_text = input_text[0]['text']
             
-            prompt = f"""Analyze the following input and identify the key domains of expertise needed.
-            Return only the domain names, separated by commas. Keep domain names simple and lowercase.
-            Example: history, architecture, culture
+            prompt = f"""Analyze the following input and identify the required specialist expertise.
+            For each required domain, specify:
+            DOMAIN: [domain name in lowercase]
+            EXPERTISE: [specific areas of expertise needed]
+            FOCUS: [key aspects to analyze]
+            
+            Separate each specialist with '---'
             
             Input: {input_text}
             
-            Required expertise:"""
+            Required specialists:"""
             
             response = self.agents['initializer'].model.generate_content(prompt)
             if not response.text:
                 return []
             
-            # Clean and validate domains
-            domains = []
-            for domain in response.text.split(','):
-                domain = domain.strip().lower()
-                if domain:  # Only add non-empty domains
-                    domains.append(domain)
+            # Parse specialist definitions
+            specialists = []
+            for specialist_def in response.text.split('---'):
+                if not specialist_def.strip():
+                    continue
+                    
+                specialist = {}
+                for line in specialist_def.strip().split('\n'):
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        key = key.strip().lower()
+                        value = value.strip()
+                        if key == 'domain':
+                            specialist['domain'] = value.lower()
+                        elif key == 'expertise':
+                            specialist['expertise'] = value
+                        elif key == 'focus':
+                            specialist['focus'] = value
+                
+                if 'domain' in specialist and 'expertise' in specialist and 'focus' in specialist:
+                    specialists.append(specialist)
             
-            return domains if domains else ['general']  # Fallback to general if no domains found
+            return specialists if specialists else [{'domain': 'general', 'expertise': 'general analysis', 'focus': 'overall topic analysis'}]
             
         except Exception as e:
             print(f"Error identifying specialists: {str(e)}")
-            return ['general']  # Fallback to general specialist on error
+            return [{'domain': 'general', 'expertise': 'general analysis', 'focus': 'overall topic analysis'}]
     
     def process_input(self, user_input: list, stream: bool = True) -> Generator[str, None, None]:
         """Process input through the collaborative agent system."""
@@ -257,7 +226,7 @@ Avoid:
             
             try:
                 # Identify needed specialists
-                domains = self.identify_required_specialists(input_text)
+                specialists = self.identify_required_specialists(input_text)
             except Exception as e:
                 if "RATE_LIMIT_EXCEEDED" in str(e):
                     yield "Rate limit exceeded during specialist identification. Please wait a moment before trying again."
@@ -270,10 +239,15 @@ Avoid:
             specialist_responses = {'initial_analysis': initial_response}
             previous_responses = [initial_response]  # Start with initial analysis
             
-            for domain in domains:
+            for specialist in specialists:
+                domain = specialist['domain']
                 try:
-                    if domain not in self.agents:
-                        self.agents[domain] = self.create_specialist(domain)
+                    # Create new specialist with specific expertise
+                    self.agents[domain] = self.create_specialist(
+                        domain=domain,
+                        expertise=specialist['expertise'],
+                        focus_areas=specialist['focus']
+                    )
                     
                     # Mark start of specialist response
                     yield f"\n### SPECIALIST: {domain}\n"
