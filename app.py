@@ -564,10 +564,19 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         synthesis_inputs = [{'text': initial_response}]  # Start with initial analysis
         
         if specialists:
-            for specialist in specialists:
+            # Get rate limiter instance
+            from agents.base_template import RateLimiter
+            rate_limiter = RateLimiter.get_instance()
+            
+            for i, specialist in enumerate(specialists):
                 try:
                     domain = specialist['domain']
                     update_progress(f"Consulting {domain.title()} specialist...")
+                    
+                    # Add delay between specialists
+                    if i > 0:
+                        time.sleep(2)  # 2 second delay between specialists
+                        rate_limiter.wait_if_needed(timeout=10)  # Wait for rate limit with timeout
                     
                     # Create new specialist with specific expertise
                     orchestrator.agents[domain] = orchestrator.create_specialist(
@@ -576,7 +585,10 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                         focus_areas=specialist['focus']
                     )
                     
-                    # Generate specialist response
+                    # Generate specialist response with reduced tokens
+                    specialist_config = orchestrator.agents[domain].config
+                    specialist_config.max_output_tokens = min(specialist_config.max_output_tokens, 1024)  # Limit token usage
+                    
                     specialist_response = ""
                     for chunk in orchestrator.agents[domain].generate_response(
                         parts,
@@ -604,7 +616,41 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
                             display_message(specialist_message)
                     
                 except Exception as e:
-                    error_container.error(f"Error with {domain} specialist: {str(e)}")
+                    if "RATE_LIMIT_EXCEEDED" in str(e):
+                        error_container.warning(f"Rate limit reached for {domain} specialist. Waiting to retry...")
+                        time.sleep(5)  # Wait 5 seconds before continuing
+                        try:
+                            # Retry once with reduced tokens
+                            specialist_config = orchestrator.agents[domain].config
+                            specialist_config.max_output_tokens = 512  # Reduce tokens for retry
+                            
+                            specialist_response = ""
+                            for chunk in orchestrator.agents[domain].generate_response(
+                                parts,
+                                previous_responses=[initial_response],
+                                stream=True
+                            ):
+                                if chunk:
+                                    specialist_response += chunk
+                            
+                            if specialist_response:
+                                specialist_message = {
+                                    "role": "assistant",
+                                    "type": "specialist",
+                                    "domain": domain,
+                                    "content": specialist_response,
+                                    "avatar": get_domain_avatar(domain)
+                                }
+                                st.session_state.messages.append(specialist_message)
+                                st.session_state.specialist_responses[domain] = specialist_response
+                                synthesis_inputs.append({'text': specialist_response})
+                                
+                                with st.empty():
+                                    display_message(specialist_message)
+                        except Exception:
+                            error_container.error(f"Could not process {domain} specialist after retry. Continuing with available responses.")
+                    else:
+                        error_container.error(f"Error with {domain} specialist: {str(e)}")
                     continue
         
         # Only proceed with synthesis if we have specialist responses
