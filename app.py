@@ -522,12 +522,9 @@ def display_message(message: dict, container=None):
     # Store placeholders in session state to persist across reruns
     container_id = str(id(container))
     placeholder_key = f"placeholder_{container_id}"
-    title_key = f"title_shown_{container_id}"
     
     if placeholder_key not in st.session_state:
         st.session_state[placeholder_key] = container.empty()
-    if title_key not in st.session_state:
-        st.session_state[title_key] = False
     
     with container:
         if role == 'user':
@@ -546,15 +543,13 @@ def display_message(message: dict, container=None):
                 }
                 title = title_map.get(message_type, "Assistant")
             
-            # Display title only once
-            if not st.session_state[title_key]:
-                container.markdown(f"### {title}")
-                container.markdown("---")
-                st.session_state[title_key] = True
-                
-                # Add AI content warning for synthesis
-                if message_type == "synthesis":
-                    container.caption("⚠️ This content is AI-generated and should be reviewed for accuracy.")
+            # Always display title for assistant messages
+            container.markdown(f"### {title}")
+            container.markdown("---")
+            
+            # Add AI content warning for synthesis
+            if message_type == "synthesis":
+                container.caption("⚠️ This content is AI-generated and should be reviewed for accuracy.")
             
             # Display content (streaming or complete)
             if content:
@@ -578,7 +573,6 @@ def display_message(message: dict, container=None):
                             key=f"download_{message_type}_{hash(content)}_{int(time.time())}"
                         )
                 elif message_type == "suggestions":
-                    container.markdown("### Follow-up Questions")
                     for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
                         if st.button(f"💡 {headline}", key=f"suggest_{message_type}_{idx}_{hash(str(headline))}_{int(time.time())}"):
                             st.session_state.next_prompt = full_question
@@ -641,7 +635,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         st.session_state.messages.append(initial_message)
         
         # Process specialists
-        specialists = orchestrator.extract_specialists_from_analysis(initial_response)
+        specialists = orchestrator._extract_specialists(initial_response)
         synthesis_inputs = [{'text': initial_response}]
         
         if specialists:
