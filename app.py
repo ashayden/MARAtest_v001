@@ -26,6 +26,7 @@ import mimetypes
 import traceback
 import sys
 import streamlit.config as st_config
+import re
 
 # Load environment variables
 load_dotenv()
@@ -719,6 +720,7 @@ def chat_interface():
         
         # Set up the layout
         st.title("AI Assistant")
+        st.caption("Powered by Google's Gemini API")
         
         # Add settings and documentation to main page
         col1, col2 = st.columns(2)
@@ -875,7 +877,7 @@ def chat_interface():
             st.code(traceback.format_exc())
 
 def display_message(message: dict):
-    """Display a chat message in a clean, standard format."""
+    """Display a chat message with clean formatting."""
     role = message.get('role', 'user')
     content = message.get('content', '')
     message_type = message.get('type', '')
@@ -886,55 +888,60 @@ def display_message(message: dict):
     
     elif role == 'assistant':
         avatar = message.get("avatar", "🤖")
-        agent_name = "Assistant"
-        if message_type == "initial_analysis":
-            agent_name = "Initial Analysis"
-        elif message_type == "specialist":
-            # Convert domain name to title case and replace underscores with spaces
-            domain = message.get("domain", "").replace("_", " ").title()
-            agent_name = f"{domain} Specialist"
-        elif message_type == "synthesis":
-            agent_name = "Final Synthesis"
-        elif message_type == "suggestions":
-            agent_name = "Follow-up Questions"
-
+        
+        # Clean title formatting
+        if message_type == "specialist":
+            # Remove markdown and clean domain name
+            domain = message.get("domain", "")
+            domain = domain.replace("_", " ").replace("*", "").strip()
+            title = f"{domain.title()} Specialist"
+        else:
+            title_map = {
+                "initial_analysis": "Initial Analysis",
+                "synthesis": "Final Synthesis",
+                "suggestions": "Follow-up Questions"
+            }
+            title = title_map.get(message_type, "Assistant")
+        
         with st.chat_message("assistant", avatar=avatar):
-            # Clean up agent name and remove any emojis
-            agent_name = agent_name.strip()
-            for emoji in ['🎯', '📚', '🎭', '🎵', '🍳', '🏛️', '🎨', '📖', '🗺️', '📈', '👥', '⚖️', '🔬', '💻', '🌿', '⚽', '🕊️', '🤔', '📊', '💡', '🔍', '🤖']:
-                agent_name = agent_name.replace(emoji, '').strip()
-            
-            # Display clean title without emoji in the title text
-            st.markdown(f"**{agent_name}**")
+            # Display clean title
+            st.markdown(f"### {title}")
             st.markdown("---")
-            st.markdown(content)
-
-            if message_type != "suggestions":
-                # Create a unique key using message type, content hash, and timestamp
-                unique_key = f"copy_{message_type}_{hash(content)}_{int(time.time())}"
-                if st.button("📋 Copy", key=unique_key):
-                    copy_to_clipboard(content)
-
+            
+            # Add AI content warning for synthesis
             if message_type == "synthesis":
-                report_content = generate_full_report()
-                # Create a unique key for download button
-                download_key = f"download_{message_type}_{hash(content)}_{int(time.time())}"
-                st.download_button(
-                    "💾 Download Report",
-                    report_content,
-                    file_name="analysis_report.md",
-                    mime="text/markdown",
-                    key=download_key
-                )
-
-            if message_type == "suggestions":
+                st.caption("⚠️ This content is AI-generated and should be reviewed for accuracy.")
+            
+            # Clean and display content
+            if content:
+                # Remove any markdown artifacts from content
+                content = re.sub(r'\*{1,2}([^\*]+)\*{1,2}', r'\1', content)
+                st.markdown(content)
+            
+            # Handle message actions
+            if message_type == "synthesis":
+                col1, col2 = st.columns([1, 4])
+                with col1:
+                    if st.button("📋 Copy", key=f"copy_{message_type}_{hash(content)}_{int(time.time())}"):
+                        copy_to_clipboard(content)
+                with col2:
+                    report_content = generate_full_report()
+                    st.download_button(
+                        "💾 Download Report",
+                        report_content,
+                        file_name="analysis_report.md",
+                        mime="text/markdown",
+                        key=f"download_{message_type}_{hash(content)}_{int(time.time())}"
+                    )
+            elif message_type == "suggestions":
                 st.markdown("### Follow-up Questions")
                 for idx, (headline, full_question) in enumerate(message.get("suggestions", [])):
-                    # Create a unique key for each suggestion button
-                    suggestion_key = f"suggest_{message_type}_{idx}_{hash(str(headline))}_{int(time.time())}"
-                    if st.button(f"💡 {headline}", key=suggestion_key):
+                    if st.button(f"💡 {headline}", key=f"suggest_{message_type}_{idx}_{hash(str(headline))}_{int(time.time())}"):
                         st.session_state.next_prompt = full_question
                         st.rerun()
+            elif message_type != "suggestions":
+                if st.button("📋 Copy", key=f"copy_{message_type}_{hash(content)}_{int(time.time())}"):
+                    copy_to_clipboard(content)
 
 def generate_full_report() -> str:
     """Generate a full report from all messages."""

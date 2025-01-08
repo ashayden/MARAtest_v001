@@ -2,6 +2,7 @@
 from typing import List, Dict, Generator
 from .base_template import BaseAgent, AgentConfig
 import re
+import time
 
 class AgentOrchestrator:
     """Manages collaboration between specialized agents."""
@@ -258,3 +259,116 @@ Avoid:
         
         except Exception as e:
             yield f"Error in agent collaboration: {str(e)}" 
+
+    def process_with_specialists(self, prompt: str, initial_analysis: str, specialists: list) -> list:
+        """Process input with specialists with better rate limit handling."""
+        specialist_responses = []
+        rate_limiter = RateLimiter.get_instance()
+        
+        for i, specialist in enumerate(specialists[:3]):  # Limit to 3 specialists
+            try:
+                # Calculate expected token count
+                expected_tokens = len(initial_analysis.split()) + len(prompt.split())
+                
+                # Wait with exponential backoff if needed
+                wait_time = rate_limiter.wait_if_needed(
+                    timeout=15,  # 15 second timeout
+                    token_count=expected_tokens,
+                    attempt=0
+                )
+                
+                # Create specialist with reduced token limit
+                domain = specialist['domain']
+                specialist_agent = self.create_specialist(
+                    domain=domain,
+                    expertise=specialist.get('expertise', ''),
+                    focus_areas=specialist.get('focus', [])
+                )
+                specialist_agent.config.max_output_tokens = 1024  # Limit tokens
+                
+                # Generate response with retry logic
+                response = None
+                retry_count = 0
+                while response is None and retry_count < 3:
+                    try:
+                        response = specialist_agent.generate_response(
+                            [{'text': prompt}],
+                            previous_responses=[initial_analysis],
+                            stream=True
+                        )
+                        specialist_responses.append({
+                            'domain': domain,
+                            'response': response,
+                            'success': True
+                        })
+                    except Exception as e:
+                        retry_count += 1
+                        if retry_count < 3:
+                            # Reduce tokens and wait before retry
+                            specialist_agent.config.max_output_tokens = 512
+                            time.sleep(rate_limiter.calculate_backoff_time(retry_count))
+                        else:
+                            specialist_responses.append({
+                                'domain': domain,
+                                'response': str(e),
+                                'success': False
+                            })
+                
+                # Add delay between specialists
+                if i < len(specialists) - 1:
+                    time.sleep(2)
+                    
+            except Exception as e:
+                specialist_responses.append({
+                    'domain': specialist.get('domain', 'unknown'),
+                    'response': str(e),
+                    'success': False
+                })
+        
+        return specialist_responses
+
+    def synthesize_responses(self, prompt: str, initial_analysis: str, specialist_responses: list) -> str:
+        """Synthesize all responses with rate limit handling."""
+        try:
+            # Calculate total tokens
+            total_tokens = len(prompt.split()) + len(initial_analysis.split())
+            for resp in specialist_responses:
+                if resp['success']:
+                    total_tokens += len(str(resp['response']).split())
+            
+            # Wait with exponential backoff
+            rate_limiter = RateLimiter.get_instance()
+            rate_limiter.wait_if_needed(
+                timeout=20,  # 20 second timeout for synthesis
+                token_count=total_tokens,
+                attempt=0
+            )
+            
+            # Prepare synthesis input
+            synthesis_input = [
+                {'text': initial_analysis}
+            ]
+            
+            # Add successful specialist responses
+            for resp in specialist_responses:
+                if resp['success']:
+                    synthesis_input.append({'text': str(resp['response'])})
+            
+            # Generate synthesis with retry
+            retry_count = 0
+            while retry_count < 3:
+                try:
+                    return self.agents['reasoner'].generate_response(
+                        [{'text': prompt}],
+                        previous_responses=synthesis_input,
+                        stream=True
+                    )
+                except Exception as e:
+                    retry_count += 1
+                    if retry_count < 3:
+                        time.sleep(rate_limiter.calculate_backoff_time(retry_count))
+                    else:
+                        raise e
+                    
+        except Exception as e:
+            return f"Error in synthesis: {str(e)}" 

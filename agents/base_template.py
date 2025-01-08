@@ -5,16 +5,21 @@ import time
 from threading import Lock
 
 class RateLimiter:
-    """Rate limiter for API requests."""
+    """Rate limiter for API requests with exponential backoff."""
     _instance = None
     _lock = Lock()
     
     def __init__(self):
         self.last_request_time = 0
         self.request_times = []  # Track request timestamps
-        self.MIN_REQUEST_INTERVAL = 1.5  # 1.5 seconds between requests
-        self.MAX_RPM = 3  # Free tier limit of 3 requests per minute
-        self.WINDOW_SIZE = 60  # 60 seconds window for rate limiting
+        self.request_complexities = {}  # Track request complexity
+        self.total_tokens_used = 0  # Track total token usage
+        self.MIN_REQUEST_INTERVAL = 2.0  # Increased to 2 seconds
+        self.MAX_RPM = 3  # Free tier limit
+        self.WINDOW_SIZE = 60  # 60 seconds window
+        self.MAX_RETRIES = 3  # Maximum retry attempts
+        self.BASE_WAIT = 5  # Base wait time for backoff
+        self.DAILY_TOKEN_LIMIT = 60000  # Example daily token limit
     
     @classmethod
     def get_instance(cls):
@@ -24,31 +29,73 @@ class RateLimiter:
                     cls._instance = cls()
         return cls._instance
     
-    def wait_if_needed(self, timeout: Optional[int] = None):
-        """Check rate limits and wait if necessary."""
+    def calculate_backoff_time(self, attempt: int) -> float:
+        """Calculate exponential backoff time."""
+        return min(self.BASE_WAIT * (2 ** attempt), 30)  # Cap at 30 seconds
+    
+    def calculate_complexity_delay(self, token_count: int) -> float:
+        """Calculate additional delay based on response complexity."""
+        # Add 0.5s delay per 1000 tokens
+        return min((token_count / 1000) * 0.5, 5.0)  # Cap at 5 seconds
+    
+    def track_token_usage(self, token_count: int):
+        """Track token usage and check limits."""
         with self._lock:
+            self.total_tokens_used += token_count
+            if self.total_tokens_used > self.DAILY_TOKEN_LIMIT:
+                raise Exception("Daily token limit exceeded")
+    
+    def wait_if_needed(self, timeout: Optional[int] = None, token_count: Optional[int] = None, attempt: int = 0):
+        """Check rate limits and wait if necessary, with exponential backoff."""
+        with self._lock:
+            # Track token usage if provided
+            if token_count:
+                self.track_token_usage(token_count)
+            
             current_time = time.time()
             
             # Clean up old request times
             self.request_times = [t for t in self.request_times if current_time - t < self.WINDOW_SIZE]
             
-            # Check if we need to wait for the minimum interval
+            # Calculate total wait time
+            base_wait = 0
+            complexity_delay = 0
+            backoff_time = 0
+            
+            # Check minimum interval
             if self.last_request_time > 0:
                 time_since_last = current_time - self.last_request_time
                 if time_since_last < self.MIN_REQUEST_INTERVAL:
-                    wait_time = self.MIN_REQUEST_INTERVAL - time_since_last
-                    if timeout and wait_time > timeout:
-                        raise Exception("Rate limit timeout exceeded")
-                    time.sleep(wait_time)
+                    base_wait = self.MIN_REQUEST_INTERVAL - time_since_last
+            
+            # Add complexity delay if token count provided
+            if token_count:
+                complexity_delay = self.calculate_complexity_delay(token_count)
+            
+            # Add backoff time if retrying
+            if attempt > 0:
+                backoff_time = self.calculate_backoff_time(attempt)
+            
+            # Calculate total wait time
+            total_wait = base_wait + complexity_delay + backoff_time
             
             # Check if we've hit the per-minute limit
             if len(self.request_times) >= self.MAX_RPM:
                 # Calculate time until oldest request expires
-                wait_time = self.WINDOW_SIZE - (current_time - self.request_times[0])
-                if timeout and wait_time > timeout:
-                    raise Exception("Rate limit timeout exceeded")
-                if wait_time > 0:
-                    time.sleep(wait_time)
+                rate_limit_wait = self.WINDOW_SIZE - (current_time - self.request_times[0])
+                total_wait = max(total_wait, rate_limit_wait)
+            
+            # Check timeout
+            if timeout and total_wait > timeout:
+                if attempt < self.MAX_RETRIES:
+                    # Sleep for backoff time and try again
+                    time.sleep(backoff_time)
+                    return self.wait_if_needed(timeout, token_count, attempt + 1)
+                raise Exception(f"Rate limit timeout exceeded after {attempt} retries")
+            
+            # Wait if needed
+            if total_wait > 0:
+                time.sleep(total_wait)
                 # Clean up expired requests again after waiting
                 current_time = time.time()
                 self.request_times = [t for t in self.request_times if current_time - t < self.WINDOW_SIZE]
@@ -56,6 +103,11 @@ class RateLimiter:
             # Record the request
             self.request_times.append(current_time)
             self.last_request_time = current_time
+            if token_count:
+                self.request_complexities[current_time] = token_count
+            
+            # Return actual wait time for logging
+            return total_wait
 
 class AgentConfig:
     """Configuration for agents."""
