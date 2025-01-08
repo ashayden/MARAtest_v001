@@ -143,11 +143,13 @@ class AgentOrchestrator:
             generation_config=self._initializer_config
         )
         
-        prompt_template = """Analyze the following topic to identify key areas requiring specialist expertise.
-        For each identified domain (maximum 3):
-        DOMAIN: [domain name in lowercase]
-        EXPERTISE: [specific areas of expertise needed]
-        FOCUS: [key aspects to analyze]
+        prompt_template = """Analyze the following topic and provide a structured analysis with exactly 3 main sections.
+        Each section should focus on a key aspect that requires specialist expertise.
+        
+        Format your response with numbered sections like this:
+        1. [First Key Aspect]: [detailed analysis]
+        2. [Second Key Aspect]: [detailed analysis]
+        3. [Third Key Aspect]: [detailed analysis]
         
         Topic: {prompt}
         """
@@ -165,26 +167,35 @@ class AgentOrchestrator:
         """Extract required specialists from analysis."""
         specialists = []
         
-        # Extract main topics from the analysis
-        topics = re.findall(r'\d+\.\s+([^:\n]+)(?=:|\n)', analysis)
+        # Extract main topics from the analysis using numbered sections
+        sections = re.findall(r'\d+\.\s+([^:]+):', analysis)
         
-        for topic in topics[:3]:  # Limit to 3 specialists
-            # Clean up the topic name
-            domain = topic.strip().lower()
-            if 'ecosystem' in domain:
+        for section in sections[:3]:  # Limit to 3 specialists
+            # Clean up the section name
+            topic = section.strip()
+            
+            # Map topics to domains
+            domain = topic.lower()
+            if any(word in domain for word in ['ecosystem', 'environment', 'nature']):
                 domain = 'ecology'
-            elif 'conservation' in domain:
-                domain = 'conservation'
-            elif 'biodiversity' in domain:
-                domain = 'biology'
-            elif 'geography' in domain or 'location' in domain:
+            elif any(word in domain for word in ['culture', 'society', 'community']):
+                domain = 'sociology'
+            elif any(word in domain for word in ['history', 'heritage', 'past']):
+                domain = 'history'
+            elif any(word in domain for word in ['geography', 'location', 'terrain']):
                 domain = 'geography'
+            elif any(word in domain for word in ['conservation', 'preservation']):
+                domain = 'conservation'
+            elif any(word in domain for word in ['wildlife', 'animals', 'species']):
+                domain = 'biology'
+            else:
+                domain = 'science'
             
             # Create specialist entry
             specialist = {
                 'domain': domain,
-                'expertise': topic.strip(),
-                'focus': f"Analyze and provide insights about {topic.strip().lower()}",
+                'expertise': topic,
+                'focus': f"Analyze and provide insights about {topic.lower()}",
                 'avatar': self._get_domain_avatar(domain)
             }
             specialists.append(specialist)

@@ -625,8 +625,14 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         }
         initial_container = display_message(initial_message)
         
+        # Generate initial analysis
         initial_response = ""
-        for chunk in orchestrator.agents['initializer'].generate_content(parts[0]['text'], stream=True):
+        model = genai.GenerativeModel(
+            'gemini-2.0-flash-exp',
+            generation_config=orchestrator._initializer_config
+        )
+        
+        for chunk in model.generate_content(parts[0]['text'], stream=True):
             if chunk.text:
                 initial_response += chunk.text
                 initial_message["content"] = initial_response
@@ -638,73 +644,71 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         display_message(initial_message, initial_container)
         st.session_state.messages.append(initial_message)
         
-        # Process specialists
+        # Extract specialists
         specialists = orchestrator._extract_specialists(initial_response)
-        synthesis_inputs = [{'text': initial_response}]
         
-        if specialists:
-            for specialist in specialists:
-                domain = specialist['domain']
-                update_progress(f"Consulting {domain.title()} specialist...")
-                
-                # Create streaming message
-                specialist_message = {
-                    "role": "assistant",
-                    "type": "specialist",
-                    "domain": domain,
-                    "content": "",
-                    "avatar": get_domain_avatar(domain),
-                    "streaming": True
-                }
-                specialist_container = display_message(specialist_message)
-                
-                # Generate specialist response
-                model = genai.GenerativeModel(
-                    'gemini-2.0-flash-exp',
-                    generation_config=orchestrator._specialist_config
-                )
-                
-                prompt_template = """You are an expert {domain} specialist with expertise in {expertise}.
-                
-                Focus your analysis on: {focus}
-                
-                Analyze the following topic from your specialist perspective:
-                {prompt}
-                
-                Consider this initial analysis:
-                {initial_analysis}
-                
-                Provide a detailed specialist analysis focusing on your domain expertise.
-                """
-                
-                formatted_prompt = prompt_template.format(
-                    domain=specialist['domain'],
-                    expertise=specialist['expertise'],
-                    focus=specialist['focus'],
-                    prompt=prompt,
-                    initial_analysis=initial_response
-                )
-                
-                specialist_response = ""
-                for chunk in model.generate_content(formatted_prompt, stream=True):
-                    if chunk.text:
-                        specialist_response += chunk.text
-                        specialist_message["content"] = specialist_response
-                        display_message(specialist_message, specialist_container)
-                
-                # Update final message
-                if specialist_response:
-                    specialist_message["streaming"] = False
+        # Process each specialist
+        for specialist in specialists:
+            domain = specialist['domain']
+            update_progress(f"Consulting {domain.title()} specialist...")
+            
+            # Create streaming message
+            specialist_message = {
+                "role": "assistant",
+                "type": "specialist",
+                "domain": domain,
+                "content": "",
+                "avatar": get_domain_avatar(domain),
+                "streaming": True
+            }
+            specialist_container = display_message(specialist_message)
+            
+            # Generate specialist response
+            model = genai.GenerativeModel(
+                'gemini-2.0-flash-exp',
+                generation_config=orchestrator._specialist_config
+            )
+            
+            prompt_template = """You are an expert {domain} specialist with expertise in {expertise}.
+            
+            Focus your analysis on: {focus}
+            
+            Analyze the following topic from your specialist perspective:
+            {prompt}
+            
+            Consider this initial analysis:
+            {initial_analysis}
+            
+            Provide a detailed specialist analysis focusing on your domain expertise.
+            Format your response with clear sections and maintain an academic tone.
+            """
+            
+            formatted_prompt = prompt_template.format(
+                domain=specialist['domain'],
+                expertise=specialist['expertise'],
+                focus=specialist['focus'],
+                prompt=prompt,
+                initial_analysis=initial_response
+            )
+            
+            specialist_response = ""
+            for chunk in model.generate_content(formatted_prompt, stream=True):
+                if chunk.text:
+                    specialist_response += chunk.text
                     specialist_message["content"] = specialist_response
                     display_message(specialist_message, specialist_container)
-                    st.session_state.messages.append(specialist_message)
-                    st.session_state.specialist_responses[domain] = specialist_response
-                    synthesis_inputs.append({'text': specialist_response})
-                
-                # Add delay between specialists to manage rate limits
-                time.sleep(2)
+            
+            # Update final message
+            specialist_message["streaming"] = False
+            specialist_message["content"] = specialist_response
+            display_message(specialist_message, specialist_container)
+            st.session_state.messages.append(specialist_message)
+            st.session_state.specialist_responses[domain] = specialist_response
+            
+            # Add delay between specialists
+            time.sleep(2)
         
-        # Generate synthesis with streaming
+        # Generate synthesis
         if st.session_state.specialist_responses:
             update_progress("Synthesizing insights...")
             synthesis_message = {
@@ -716,6 +720,7 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             }
             synthesis_container = display_message(synthesis_message)
             
+            # Create synthesis prompt
             synthesis_prompt = f"""Create a comprehensive synthesis report for the following topic:
             {prompt}
             
@@ -732,38 +737,40 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             Format the report in markdown with clear section headings.
             """
             
+            # Generate synthesis
+            model = genai.GenerativeModel(
+                'gemini-2.0-flash-exp',
+                generation_config=orchestrator._synthesis_config
+            )
+            
             synthesis = ""
-            for chunk in orchestrator.agents['reasoner'].generate_content(
-                synthesis_prompt,
-                stream=True
-            ):
+            for chunk in model.generate_content(synthesis_prompt, stream=True):
                 if chunk.text:
                     synthesis += chunk.text
                     synthesis_message["content"] = synthesis
                     display_message(synthesis_message, synthesis_container)
             
             # Update final synthesis
-            if synthesis:
-                synthesis_message["streaming"] = False
-                synthesis_message["content"] = synthesis
-                display_message(synthesis_message, synthesis_container)
-                st.session_state.messages.append(synthesis_message)
-                
-                # Generate suggestions
-                update_progress("Generating follow-up questions...")
-                try:
-                    suggestions = generate_suggestions(synthesis)
-                    if suggestions:
-                        suggestions_message = {
-                            "role": "assistant",
-                            "type": "suggestions",
-                            "suggestions": suggestions,
-                            "avatar": "💡"
-                        }
-                        st.session_state.messages.append(suggestions_message)
-                        display_message(suggestions_message)
-                except Exception as e:
-                    error_container.error(f"Error generating suggestions: {str(e)}")
+            synthesis_message["streaming"] = False
+            synthesis_message["content"] = synthesis
+            display_message(synthesis_message, synthesis_container)
+            st.session_state.messages.append(synthesis_message)
+            
+            # Generate suggestions
+            update_progress("Generating follow-up questions...")
+            try:
+                suggestions = generate_suggestions(synthesis)
+                if suggestions:
+                    suggestions_message = {
+                        "role": "assistant",
+                        "type": "suggestions",
+                        "suggestions": suggestions,
+                        "avatar": "💡"
+                    }
+                    st.session_state.messages.append(suggestions_message)
+                    display_message(suggestions_message)
+            except Exception as e:
+                error_container.error(f"Error generating suggestions: {str(e)}")
         
         update_progress("Complete!")
         return synthesis
