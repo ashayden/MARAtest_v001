@@ -628,9 +628,9 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
         initial_container = display_message(initial_message)
         
         initial_response = ""
-        for chunk in orchestrator.agents['initializer'].generate_response(parts, stream=True):
-            if chunk:
-                initial_response += chunk
+        for chunk in orchestrator.agents['initializer'].generate_content(parts[0]['text'], stream=True):
+            if chunk.text:
+                initial_response += chunk.text
                 initial_message["content"] = initial_response
                 display_message(initial_message, initial_container)
         
@@ -690,13 +690,12 @@ def process_with_orchestrator(orchestrator, prompt: str, files_data: list = None
             synthesis_container = display_message(synthesis_message)
             
             synthesis = ""
-            for chunk in orchestrator.agents['reasoner'].generate_response(
-                parts,
-                previous_responses=synthesis_inputs,
+            for chunk in orchestrator.agents['reasoner'].generate_content(
+                parts[0]['text'],
                 stream=True
             ):
-                if chunk:
-                    synthesis += chunk
+                if chunk.text:
+                    synthesis += chunk.text
                     synthesis_message["content"] = synthesis
                     display_message(synthesis_message, synthesis_container)
             
