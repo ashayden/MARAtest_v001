@@ -95,15 +95,31 @@ st.markdown("""
 
 /* Main container */
 .main .block-container {
-    max-width: 1000px;
+    max-width: 1200px;
     padding-bottom: 100px;
     margin: 0 auto;
 }
 
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background-color: #1a1a1a;
-    padding: 2rem 1rem;
+/* Settings columns */
+[data-testid="stHorizontalBlock"] {
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+/* Expanders */
+.streamlit-expanderHeader {
+    background-color: #2d2d2d;
+    border: 1px solid #404040;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.streamlit-expanderContent {
+    background-color: #2d2d2d;
+    border: 1px solid #404040;
+    border-radius: 0 0 8px 8px;
+    padding: 1rem;
+    margin-top: -1px;
 }
 
 /* Chat messages */
@@ -132,6 +148,7 @@ st.markdown("""
 
 [data-testid="stChatInput"] > div {
     margin: 0 auto;
+    max-width: 1200px;
 }
 
 [data-testid="stChatInput"] textarea {
@@ -184,6 +201,20 @@ header {visibility: hidden;}
 /* Ensure content doesn't go behind input */
 .main .block-container {
     padding-bottom: 100px !important;
+}
+
+/* Sliders */
+.stSlider {
+    padding: 1rem 0;
+}
+
+/* Info boxes */
+.stAlert {
+    background-color: #2d2d2d;
+    border: 1px solid #404040;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -440,111 +471,6 @@ def prepare_messages(text_input: str, files_data: list = None) -> list:
     
     return parts
 
-def model_settings_sidebar():
-    """Sidebar for model settings and documentation."""
-    with st.sidebar:
-        # Model Settings section
-        with st.expander("⚙️ Model Settings", expanded=False):
-            st.subheader("🔬 Domain Specialist Settings")
-            st.info("""
-            Adjust these settings to control how domain specialists analyze and respond to queries.
-            Other agents (Initializer and Synthesizer) use fixed settings for consistency.
-            """)
-            
-            # Temperature slider
-            st.session_state.temperature = st.slider(
-                "Creativity Level",
-                min_value=0.0,
-                max_value=1.0,
-                value=st.session_state.temperature,
-                step=0.1,
-                help="Higher values make specialist responses more creative but less focused"
-            )
-            
-            # Top P slider
-            st.session_state.top_p = st.slider(
-                "Response Diversity",
-                min_value=0.0,
-                max_value=1.0,
-                value=st.session_state.top_p,
-                step=0.05,
-                help="Controls how diverse specialist responses can be"
-            )
-            
-            # Top K slider
-            st.session_state.top_k = st.slider(
-                "Choice Range",
-                min_value=1,
-                max_value=100,
-                value=st.session_state.top_k,
-                step=1,
-                help="Controls how many options specialists consider for each word"
-            )
-            
-            # Max Output Tokens slider
-            st.session_state.max_output_tokens = st.slider(
-                "Maximum Response Length",
-                min_value=256,
-                max_value=4096,
-                value=st.session_state.max_output_tokens,
-                step=256,
-                help="Maximum length of specialist responses"
-            )
-        
-        # How it Works section
-        with st.expander("ℹ️ How it Works", expanded=False):
-            st.markdown("""
-            This AI Assistant uses the Gemini 2.0 Flash Experimental model to provide comprehensive analysis through a coordinated multi-agent system.
-            
-            ### System Configuration
-            - **Model**: Gemini 2.0 Flash Experimental
-            - **Rate Limits**: 3 requests per minute (free tier)
-            - **Request Interval**: 1.5 seconds minimum between requests
-            
-            ### Multi-Agent Response Architecture
-            
-            #### 1. Initial Analysis Agent (Fixed Settings)
-            - Temperature: 0.5 (balanced)
-            - Purpose: Analyzes input and identifies required expertise
-            - Determines which specialists to consult
-            - Provides initial context framework
-            
-            #### 2. Domain Specialists (Adjustable Settings)
-            - Created dynamically based on input topic
-            - Expertise determined in real-time
-            - Controlled by sidebar model settings
-            - Each specialist provides domain-specific insights
-            
-            #### 3. Synthesis Agent (Fixed Settings)
-            - Temperature: 0.3 (focused)
-            - Integrates all specialist responses
-            - Creates cohesive final report
-            - Maintains consistent academic structure
-            
-            ### Rate Limit Management
-            - Maximum 3 requests per minute
-            - 1.5 second pause between requests
-            - Manual retry required if limits exceeded
-            - Clear error messages when limits are reached
-            
-            ### Features
-            - Real-time streaming responses
-            - Dynamic specialist creation
-            - Persistent chat history
-            - Downloadable reports
-            - Copy functionality
-            - Follow-up suggestions
-            
-            ### Model Settings (Sidebar)
-            Adjust these settings to control specialist behavior:
-            - **Creativity Level**: Controls response variety
-            - **Response Diversity**: Affects token selection
-            - **Choice Range**: Influences word selection
-            - **Maximum Length**: Sets response length limit
-            
-            Note: Initial Analysis and Synthesis agents use fixed settings for consistency.
-            """)
-
 def get_orchestrator():
     """Get or create the agent orchestrator."""
     if 'orchestrator' not in st.session_state:
@@ -747,9 +673,115 @@ def chat_interface():
         # Set up the layout
         st.title("AI Assistant")
         
-        # Configure sidebar
-        with st.sidebar:
-            model_settings_sidebar()
+        # Add settings and documentation to main page
+        col1, col2 = st.columns(2)
+        
+        # Model Settings in first column
+        with col1:
+            with st.expander("⚙️ Model Settings", expanded=False):
+                st.subheader("🔬 Domain Specialist Settings")
+                st.info("""
+                Adjust these settings to control how domain specialists analyze and respond to queries.
+                Other agents (Initializer and Synthesizer) use fixed settings for consistency.
+                """)
+                
+                # Temperature slider
+                st.session_state.temperature = st.slider(
+                    "Creativity Level",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=st.session_state.temperature,
+                    step=0.1,
+                    help="Higher values make specialist responses more creative but less focused"
+                )
+                
+                # Top P slider
+                st.session_state.top_p = st.slider(
+                    "Response Diversity",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=st.session_state.top_p,
+                    step=0.05,
+                    help="Controls how diverse specialist responses can be"
+                )
+                
+                # Top K slider
+                st.session_state.top_k = st.slider(
+                    "Choice Range",
+                    min_value=1,
+                    max_value=100,
+                    value=st.session_state.top_k,
+                    step=1,
+                    help="Controls how many options specialists consider for each word"
+                )
+                
+                # Max Output Tokens slider
+                st.session_state.max_output_tokens = st.slider(
+                    "Maximum Response Length",
+                    min_value=256,
+                    max_value=4096,
+                    value=st.session_state.max_output_tokens,
+                    step=256,
+                    help="Maximum length of specialist responses"
+                )
+        
+        # How it Works in second column
+        with col2:
+            with st.expander("ℹ️ How it Works", expanded=False):
+                st.markdown("""
+                This AI Assistant uses the Gemini 2.0 Flash Experimental model to provide comprehensive analysis through a coordinated multi-agent system.
+                
+                ### System Configuration
+                - **Model**: Gemini 2.0 Flash Experimental
+                - **Rate Limits**: 3 requests per minute (free tier)
+                - **Request Interval**: 1.5 seconds minimum between requests
+                
+                ### Multi-Agent Response Architecture
+                
+                #### 1. Initial Analysis Agent (Fixed Settings)
+                - Temperature: 0.5 (balanced)
+                - Purpose: Analyzes input and identifies required expertise
+                - Determines which specialists to consult
+                - Provides initial context framework
+                
+                #### 2. Domain Specialists (Adjustable Settings)
+                - Created dynamically based on input topic
+                - Expertise determined in real-time
+                - Controlled by model settings
+                - Each specialist provides domain-specific insights
+                
+                #### 3. Synthesis Agent (Fixed Settings)
+                - Temperature: 0.3 (focused)
+                - Integrates all specialist responses
+                - Creates cohesive final report
+                - Maintains consistent academic structure
+                
+                ### Rate Limit Management
+                - Maximum 3 requests per minute
+                - 1.5 second pause between requests
+                - Manual retry required if limits exceeded
+                - Clear error messages when limits are reached
+                
+                ### Features
+                - Real-time streaming responses
+                - Dynamic specialist creation
+                - Persistent chat history
+                - Downloadable reports
+                - Copy functionality
+                - Follow-up suggestions
+                
+                ### Model Settings
+                Adjust these settings to control specialist behavior:
+                - **Creativity Level**: Controls response variety
+                - **Response Diversity**: Affects token selection
+                - **Choice Range**: Influences word selection
+                - **Maximum Length**: Sets response length limit
+                
+                Note: Initial Analysis and Synthesis agents use fixed settings for consistency.
+                """)
+        
+        # Add horizontal line after settings
+        st.markdown("---")
         
         # Get orchestrator
         orchestrator = get_orchestrator()
